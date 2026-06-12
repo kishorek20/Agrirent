@@ -36,3 +36,6 @@ lib/config/secrets.dart
 .idea/
 .vscode/
 *.iml
+
+# Office temp lock files
+~$*
