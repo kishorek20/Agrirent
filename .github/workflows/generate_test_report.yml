@@ -1,0 +1,41 @@
+name: Generate Test Report Excel
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'AgriRent_Full_Functionality_Test_Report.csv'   # run when CSV changes
+  workflow_dispatch:                                      # allow manual trigger
+
+jobs:
+  build-excel:
+    name: Convert CSV → Excel & Upload Artifact
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout repo ──────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Set up Python ─────────────────────────────────────────────────
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # ── 3. Install openpyxl ───────────────────────────────────────────────
+      - name: Install dependencies
+        run: pip install openpyxl --quiet
+
+      # ── 4. Run conversion script ──────────────────────────────────────────
+      - name: Convert CSV to Excel
+        run: python .github/scripts/csv_to_excel.py
+
+      # ── 5. Upload Excel as artifact (downloadable as .zip from Actions UI) ─
+      - name: Upload Excel Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: AgriRent-Test-Report-Excel
+          path: test/AgriRent_Test_Report.xlsx
+          retention-days: 30          # keep for 30 days
+          if-no-files-found: error
