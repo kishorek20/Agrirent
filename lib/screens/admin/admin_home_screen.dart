@@ -169,8 +169,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                     )
                   else ...[
                     // Stats Grid
-                    GridView.count(
-                      crossAxisCount: 2,
+                    GridView.extent(
+                      maxCrossAxisExtent: 250,
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       crossAxisSpacing: 12,

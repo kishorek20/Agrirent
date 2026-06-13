@@ -233,8 +233,8 @@ class _SearchVehiclesScreenState extends State<SearchVehiclesScreen> {
                                 child: GridView.builder(
                                   padding: const EdgeInsets.all(16),
                                   gridDelegate:
-                                      const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
+                                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                                    maxCrossAxisExtent: 250,
                                     crossAxisSpacing: 12,
                                     mainAxisSpacing: 12,
                                     childAspectRatio: 0.75,

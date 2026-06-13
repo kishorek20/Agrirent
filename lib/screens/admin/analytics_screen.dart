@@ -112,8 +112,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     const SizedBox(height: 20),
 
                     // ── Stats Grid ─────────────────────────────
-                    GridView.count(
-                      crossAxisCount: 2,
+                    GridView.extent(
+                      maxCrossAxisExtent: 250,
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       crossAxisSpacing: 12,
