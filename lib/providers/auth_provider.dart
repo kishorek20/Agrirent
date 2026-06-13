@@ -104,6 +104,19 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> resetPassword(String email) async {
+    _setLoading();
+    try {
+      await _svc.resetPassword(email);
+      _status = AuthStatus.unauthenticated;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setError(_friendly(e.toString()));
+      return false;
+    }
+  }
+
   Future<bool> updateProfile(Map<String, dynamic> data) async {
     if (_user == null) return false;
     try {

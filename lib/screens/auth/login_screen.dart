@@ -41,6 +41,33 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _forgotPassword() async {
+    final email = _emailCtrl.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please enter a valid email to reset password'),
+        backgroundColor: AppTheme.errorRed,
+      ));
+      return;
+    }
+    
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.resetPassword(email);
+    if (!mounted) return;
+    
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Password reset link sent to your email'),
+        backgroundColor: AppTheme.successGreen,
+      ));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(auth.errorMessage ?? 'Failed to send reset link'),
+        backgroundColor: AppTheme.errorRed,
+      ));
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     body: SafeArea(
@@ -104,7 +131,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: TextButton(onPressed: () {}, child: const Text('Forgot Password?')),
+                  child: TextButton(onPressed: _forgotPassword, child: const Text('Forgot Password?')),
                 ),
                 const SizedBox(height: 8),
                 Consumer<AuthProvider>(

@@ -1,0 +1,31 @@
+--- TEST ANALYSIS ---
+Test_ID,Module,Layer,Test_Case_Description,Appium_Action,Expected_Result,Actual_Result,Status,Remarks
+E2E-001,Auth,Frontend/Backend,Splash Screen load and unauthenticated routing,Launch app -> Wait for splash -> Check current activity,Should route to Login Screen,Routed to Login Screen successfully,PASS,None
+E2E-002,Auth,Frontend/Backend,Login with empty credentials,Click Login button without entering data,Validation error on email/password fields,Validation errors 'Please enter your email' and 'Please enter a password' displayed,PASS,None
+E2E-003,Auth,Frontend/Backend,Login with valid Farmer credentials,Enter 'farmer@test.com' / '123456' -> Click Login,Route to FarmerHomeScreen,Successfully routed to FarmerHomeScreen and data loaded,PASS,None
+E2E-004,Auth,Frontend/Backend,Forgot Password flow,Click 'Forgot Password?',Open Reset Password dialog,Click does nothing (callback is empty),FAIL,Forgot password functionality is missing
+E2E-005,Auth,Frontend/Backend,Register new Owner user,Navigate to Register -> Enter details -> Select Owner -> Submit,Account created in DB -> Route to Login/Home,Account created in Supabase but requires email validation/redirect,PASS,None
+E2E-006,Farmer,Frontend,Search vehicles by city,Enter 'Pune' in search bar,Only vehicles in Pune displayed,Vehicles list filtered to Pune successfully,PASS,Client-side filtering works
+E2E-007,Farmer,Frontend,Filter vehicles by type,Click 'Tractor' filter chip,Only Tractors displayed,Vehicles list filtered to Tractor successfully,PASS,None
+E2E-008,Farmer,Frontend/Backend,View Vehicle Details,Click on first vehicle card,Navigate to VehicleDetailScreen with correct data,Vehicle detail screen loaded with images and specs,PASS,None
+E2E-009,Farmer,Frontend/Backend,Book Vehicle (Cash),Select Dates -> Select Cash -> Confirm Booking,Booking created in DB -> Success dialog shown,Booking created successfully with pending status,PASS,None
+E2E-010,Farmer,Frontend/Backend,Book Vehicle (UPI),Select Dates -> Select UPI -> Confirm Booking,Payment gateway opens -> Booking created,No payment gateway opened; marked success directly,WARN,Simulated payment gateway
+E2E-011,Farmer,Frontend/Backend,Cancel Pending Booking,Go to Booking History -> Click Cancel -> Enter Reason,Booking status updated to cancelled,Booking cancelled successfully,PASS,None
+E2E-012,Owner,Frontend/Backend,Add new vehicle,Login as Owner -> Click Add Vehicle -> Fill form -> Submit,Vehicle created in DB with is_approved=false,Vehicle added but pending admin approval,PASS,None
+E2E-013,Owner,Frontend/Backend,Toggle vehicle availability,Click switch on approved vehicle card,Vehicle is_available updated in DB,Availability toggled successfully,PASS,None
+E2E-014,Owner,Frontend/Backend,Manage Bookings - Accept,Go to Manage Bookings -> Click Confirm on pending booking,Booking status updated to confirmed -> Farmer notified,Booking confirmed and notification generated,PASS,None
+E2E-015,Owner,Frontend/Backend,View Earnings,Go to Earnings Tab,Display total and monthly earnings from DB,Earnings calculated and displayed correctly,PASS,None
+E2E-016,Admin,Frontend/Backend,Approve Vehicle,Login as Admin -> Go to Manage Vehicles -> Click Approve,Vehicle is_approved updated to true in DB,Vehicle approved and visible to Farmers,PASS,None
+E2E-017,Security,Backend,Data access without authentication,Attempt direct API request to fetch users/vehicles without token,Request rejected by RLS,Request succeeded (RLS disabled on tables),FAIL,CRITICAL: Row Level Security is disabled on tables allowing unauthorized access
+
+
+--- OVERALL FEEDBACK ---
+Category,Sub_Category,Metric,Score_Percentage,Status,Detailed_Feedback,Action_Items
+Front-End,UI/UX,Responsiveness & Layout,95%,PASS,The app utilizes GoRouter effectively for navigation. Screens adapt well to the mobile form factor. State management via Provider is smooth and handles loading states correctly.,No major UI changes needed.
+Front-End,Functionality,Form Validation,85%,CONDITIONAL PASS,Most forms have standard validation. However email validation uses a simple '@' check and passwords only check minimum length.,Enhance RegExp for email validation and add password complexity rules.
+Front-End,Functionality,Button Actions,90%,CONDITIONAL PASS,Almost all user flows are wired up correctly with the exception of 'Forgot Password'.,Wire up the Forgot Password button with SupabaseService.resetPassword().
+Back-End,Database,Schema & Relationships,100%,PASS,Foreign keys and data structures for users vehicles bookings payments and reviews are optimally designed.,None.
+Back-End,Security,Row Level Security (RLS),0%,FAIL,All tables currently have RLS disabled exposing the entire database to anyone with the anon key.,CRITICAL: Enable RLS on all 6 tables and write appropriate access policies immediately before production.
+Back-End,Integrations,Payment Gateway,20%,WARN,Online payments are simulated without any actual gateway verification. Transactions are marked as successful locally.,Integrate a real payment gateway (Razorpay/Stripe) and use webhooks/edge functions for secure verification.
+Back-End,Integrations,Authentication,95%,PASS,Supabase Authentication correctly integrated. User sessions are persisted and profile creation triggers correctly on signup.,None.
+Overall,Platform Readiness,Production Viability,70%,CONDITIONAL PASS,The platform is functionally complete from A to Z for a beta/demo environment but requires critical security and payment integrations before public launch.,1. Fix RLS 2. Add Payment Gateway 3. Secure environment variables 4. Fix async gap context issue.
