@@ -24,6 +24,7 @@ import '../screens/admin/manage_vehicles_screen.dart';
 import '../screens/admin/view_bookings_screen.dart';
 import '../screens/admin/analytics_screen.dart';
 import '../screens/shared/notifications_screen.dart';
+import 'app_theme.dart';
 
 class AppRouter {
   static const _publicPaths = ['/splash', '/login', '/register'];
@@ -116,6 +117,61 @@ class AppRouter {
   }
 }
 
+// ─── Responsive Navigation Helpers ──────────────────────────────────────────
+
+PreferredSizeWidget? _buildTopNav(
+  BuildContext context,
+  int currentIndex,
+  List<String> paths,
+  List<BottomNavigationBarItem> items,
+  bool isWeb,
+) {
+  if (!isWeb) return null;
+  return AppBar(
+    backgroundColor: Colors.white,
+    elevation: 1,
+    title: const Row(
+      children: [
+        Icon(Icons.agriculture, color: AppTheme.primaryGreen),
+        SizedBox(width: 8),
+        Text('AgriRent',
+            style: TextStyle(
+                color: AppTheme.primaryGreen, fontWeight: FontWeight.bold)),
+      ],
+    ),
+    actions: [
+      for (int i = 0; i < items.length; i++)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+          child: TextButton.icon(
+            onPressed: () => context.go(paths[i]),
+            icon: Theme(
+              data: Theme.of(context).copyWith(
+                iconTheme: IconThemeData(
+                  color: i == currentIndex
+                      ? AppTheme.primaryGreen
+                      : Colors.grey.shade700,
+                  size: 20,
+                ),
+              ),
+              child: i == currentIndex ? items[i].activeIcon : items[i].icon,
+            ),
+            label: Text(
+              items[i].label ?? '',
+              style: TextStyle(
+                color: i == currentIndex
+                    ? AppTheme.primaryGreen
+                    : Colors.grey.shade700,
+                fontWeight: i == currentIndex ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ),
+        ),
+      const SizedBox(width: 16),
+    ],
+  );
+}
+
 // ─── Bottom-nav shells ────────────────────────────────────────────────────────
 
 class _FarmerShell extends StatelessWidget {
@@ -124,24 +180,53 @@ class _FarmerShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final loc  = GoRouterState.of(context).matchedLocation;
-    final paths = ['/farmer/home', '/farmer/search', '/farmer/bookings', '/farmer/notifications', '/farmer/profile'];
+    final loc = GoRouterState.of(context).matchedLocation;
+    final paths = [
+      '/farmer/home',
+      '/farmer/search',
+      '/farmer/bookings',
+      '/farmer/notifications',
+      '/farmer/profile'
+    ];
     final idx = paths.indexWhere(loc.startsWith);
     final cur = idx < 0 ? 0 : idx;
-    return Scaffold(
-      body: child,
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: cur,
-        onTap: (i) => context.go(paths[i]),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined),             activeIcon: Icon(Icons.home),             label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.search),                    activeIcon: Icon(Icons.search),           label: 'Search'),
-          BottomNavigationBarItem(icon: Icon(Icons.book_online_outlined),      activeIcon: Icon(Icons.book_online),      label: 'Bookings'),
-          BottomNavigationBarItem(icon: Icon(Icons.notifications_outlined),    activeIcon: Icon(Icons.notifications),    label: 'Alerts'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline),            activeIcon: Icon(Icons.person),           label: 'Profile'),
-        ],
-      ),
-    );
+    const items = [
+      BottomNavigationBarItem(
+          icon: Icon(Icons.home_outlined),
+          activeIcon: Icon(Icons.home),
+          label: 'Home'),
+      BottomNavigationBarItem(
+          icon: Icon(Icons.search),
+          activeIcon: Icon(Icons.search),
+          label: 'Search'),
+      BottomNavigationBarItem(
+          icon: Icon(Icons.book_online_outlined),
+          activeIcon: Icon(Icons.book_online),
+          label: 'Bookings'),
+      BottomNavigationBarItem(
+          icon: Icon(Icons.notifications_outlined),
+          activeIcon: Icon(Icons.notifications),
+          label: 'Alerts'),
+      BottomNavigationBarItem(
+          icon: Icon(Icons.person_outline),
+          activeIcon: Icon(Icons.person),
+          label: 'Profile'),
+    ];
+
+    return LayoutBuilder(builder: (context, constraints) {
+      final isWeb = constraints.maxWidth >= 800;
+      return Scaffold(
+        appBar: _buildTopNav(context, cur, paths, items, isWeb),
+        body: child,
+        bottomNavigationBar: isWeb
+            ? null
+            : BottomNavigationBar(
+                currentIndex: cur,
+                onTap: (i) => context.go(paths[i]),
+                items: items,
+              ),
+      );
+    });
   }
 }
 
@@ -152,23 +237,52 @@ class _OwnerShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final loc = GoRouterState.of(context).matchedLocation;
-    final paths = ['/owner/home', '/owner/bookings', '/owner/notifications', '/owner/earnings', '/owner/profile'];
+    final paths = [
+      '/owner/home',
+      '/owner/bookings',
+      '/owner/notifications',
+      '/owner/earnings',
+      '/owner/profile'
+    ];
     final idx = paths.indexWhere(loc.startsWith);
     final cur = idx < 0 ? 0 : idx;
-    return Scaffold(
-      body: child,
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: cur,
-        onTap: (i) => context.go(paths[i]),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.agriculture_outlined),      activeIcon: Icon(Icons.agriculture),      label: 'Vehicles'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_outlined),   activeIcon: Icon(Icons.calendar_today),   label: 'Bookings'),
-          BottomNavigationBarItem(icon: Icon(Icons.notifications_outlined),    activeIcon: Icon(Icons.notifications),    label: 'Alerts'),
-          BottomNavigationBarItem(icon: Icon(Icons.attach_money_outlined),     activeIcon: Icon(Icons.attach_money),     label: 'Earnings'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline),            activeIcon: Icon(Icons.person),           label: 'Profile'),
-        ],
-      ),
-    );
+    const items = [
+      BottomNavigationBarItem(
+          icon: Icon(Icons.agriculture_outlined),
+          activeIcon: Icon(Icons.agriculture),
+          label: 'Vehicles'),
+      BottomNavigationBarItem(
+          icon: Icon(Icons.calendar_today_outlined),
+          activeIcon: Icon(Icons.calendar_today),
+          label: 'Bookings'),
+      BottomNavigationBarItem(
+          icon: Icon(Icons.notifications_outlined),
+          activeIcon: Icon(Icons.notifications),
+          label: 'Alerts'),
+      BottomNavigationBarItem(
+          icon: Icon(Icons.attach_money_outlined),
+          activeIcon: Icon(Icons.attach_money),
+          label: 'Earnings'),
+      BottomNavigationBarItem(
+          icon: Icon(Icons.person_outline),
+          activeIcon: Icon(Icons.person),
+          label: 'Profile'),
+    ];
+
+    return LayoutBuilder(builder: (context, constraints) {
+      final isWeb = constraints.maxWidth >= 800;
+      return Scaffold(
+        appBar: _buildTopNav(context, cur, paths, items, isWeb),
+        body: child,
+        bottomNavigationBar: isWeb
+            ? null
+            : BottomNavigationBar(
+                currentIndex: cur,
+                onTap: (i) => context.go(paths[i]),
+                items: items,
+              ),
+      );
+    });
   }
 }
 
@@ -179,22 +293,51 @@ class _AdminShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final loc = GoRouterState.of(context).matchedLocation;
-    final paths = ['/admin/home', '/admin/users', '/admin/vehicles', '/admin/bookings', '/admin/notifications'];
+    final paths = [
+      '/admin/home',
+      '/admin/users',
+      '/admin/vehicles',
+      '/admin/bookings',
+      '/admin/notifications'
+    ];
     final idx = paths.indexWhere(loc.startsWith);
     final cur = idx < 0 ? 0 : idx;
-    return Scaffold(
-      body: child,
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: cur,
-        onTap: (i) => context.go(paths[i]),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined),        activeIcon: Icon(Icons.dashboard),        label: 'Dashboard'),
-          BottomNavigationBarItem(icon: Icon(Icons.people_outline),            activeIcon: Icon(Icons.people),           label: 'Users'),
-          BottomNavigationBarItem(icon: Icon(Icons.agriculture_outlined),      activeIcon: Icon(Icons.agriculture),      label: 'Vehicles'),
-          BottomNavigationBarItem(icon: Icon(Icons.book_online_outlined),      activeIcon: Icon(Icons.book_online),      label: 'Bookings'),
-          BottomNavigationBarItem(icon: Icon(Icons.notifications_outlined),    activeIcon: Icon(Icons.notifications),    label: 'Alerts'),
-        ],
-      ),
-    );
+    const items = [
+      BottomNavigationBarItem(
+          icon: Icon(Icons.dashboard_outlined),
+          activeIcon: Icon(Icons.dashboard),
+          label: 'Dashboard'),
+      BottomNavigationBarItem(
+          icon: Icon(Icons.people_outline),
+          activeIcon: Icon(Icons.people),
+          label: 'Users'),
+      BottomNavigationBarItem(
+          icon: Icon(Icons.agriculture_outlined),
+          activeIcon: Icon(Icons.agriculture),
+          label: 'Vehicles'),
+      BottomNavigationBarItem(
+          icon: Icon(Icons.book_online_outlined),
+          activeIcon: Icon(Icons.book_online),
+          label: 'Bookings'),
+      BottomNavigationBarItem(
+          icon: Icon(Icons.notifications_outlined),
+          activeIcon: Icon(Icons.notifications),
+          label: 'Alerts'),
+    ];
+
+    return LayoutBuilder(builder: (context, constraints) {
+      final isWeb = constraints.maxWidth >= 800;
+      return Scaffold(
+        appBar: _buildTopNav(context, cur, paths, items, isWeb),
+        body: child,
+        bottomNavigationBar: isWeb
+            ? null
+            : BottomNavigationBar(
+                currentIndex: cur,
+                onTap: (i) => context.go(paths[i]),
+                items: items,
+              ),
+      );
+    });
   }
 }
