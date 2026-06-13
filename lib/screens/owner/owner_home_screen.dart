@@ -105,7 +105,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
           slivers: [
             // ── App Bar ──────────────────────────────────────
             SliverAppBar(
-              expandedHeight: 200,
+              expandedHeight: 230,
               pinned: true,
               automaticallyImplyLeading: false,
               backgroundColor: AppTheme.primaryGreen,
@@ -156,12 +156,15 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
                       ),
                       const SizedBox(height: 20),
                       // Quick stats row
-                      Row(
-                        children: [
-                          _quickStat('${_vehicles.length}', 'Total'),
-                          _quickStat('$available', 'Available'),
-                          _quickStat('$pending', 'Pending'),
-                        ],
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Row(
+                          children: [
+                            _quickStat('${_vehicles.length}', 'Total'),
+                            _quickStat('$available', 'Available'),
+                            _quickStat('$pending', 'Pending'),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -261,21 +264,28 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
 
   Widget _quickStat(String value, String label) => Expanded(
         child: Container(
-          margin: const EdgeInsets.only(right: 8),
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(value,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold)),
-              Text(label,
-                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
+              Text(
+                value,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ),
         ),

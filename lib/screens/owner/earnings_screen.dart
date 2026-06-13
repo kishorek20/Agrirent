@@ -145,10 +145,13 @@ class _EarningsScreenState extends State<EarningsScreen> {
                           ),
                         ),
                         const SizedBox(width: 12),
-                        const Expanded(
+                        Expanded(
                           child: _StatCard(
                             label: 'Rating',
-                            value: '4.5 ⭐',
+                            value: () {
+                              final r = (_earnings['avg_rating'] as double?) ?? 0.0;
+                              return r == 0.0 ? 'N/A' : '${r.toStringAsFixed(1)} ⭐';
+                            }(),
                             icon: Icons.star,
                             color: AppTheme.accentOrange,
                           ),
@@ -167,84 +170,102 @@ class _EarningsScreenState extends State<EarningsScreen> {
                         padding: const EdgeInsets.all(20),
                         child: SizedBox(
                           height: 200,
-                          child: BarChart(
-                            BarChartData(
-                              alignment: BarChartAlignment.spaceAround,
-                              maxY: 10000,
-                              barTouchData: BarTouchData(enabled: false),
-                              titlesData: FlTitlesData(
-                                show: true,
-                                bottomTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    getTitlesWidget: (value, meta) {
-                                      const months = [
-                                        'Jan', 'Feb', 'Mar', 'Apr',
-                                        'May', 'Jun', 'Jul', 'Aug',
-                                        'Sep', 'Oct', 'Nov', 'Dec'
-                                      ];
-                                      final idx = value.toInt();
-                                      return Text(
-                                        idx < months.length
-                                            ? months[idx]
-                                            : '',
+                          child: Builder(builder: (_) {
+                            final monthly = (_earnings['monthly_earnings']
+                                    as List<double>?) ??
+                                List<double>.filled(12, 0.0);
+                            final maxVal =
+                                monthly.reduce((a, b) => a > b ? a : b);
+                            // Minimum scale so chart looks nice when all 0
+                            final maxY = maxVal < 1000 ? 1000.0 : maxVal * 1.2;
+                            return BarChart(
+                              BarChartData(
+                                alignment: BarChartAlignment.spaceAround,
+                                maxY: maxY,
+                                barTouchData: BarTouchData(
+                                  enabled: true,
+                                  touchTooltipData: BarTouchTooltipData(
+                                    getTooltipItem: (g, gi, rod, ri) =>
+                                        BarTooltipItem(
+                                      '₹${rod.toY.toStringAsFixed(0)}',
+                                      const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ),
+                                titlesData: FlTitlesData(
+                                  show: true,
+                                  bottomTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      getTitlesWidget: (value, meta) {
+                                        const months = [
+                                          'Jan', 'Feb', 'Mar', 'Apr',
+                                          'May', 'Jun', 'Jul', 'Aug',
+                                          'Sep', 'Oct', 'Nov', 'Dec'
+                                        ];
+                                        final idx = value.toInt();
+                                        return Text(
+                                          idx < months.length ? months[idx] : '',
+                                          style: const TextStyle(
+                                              fontSize: 10,
+                                              color: AppTheme.greyText),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  leftTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      getTitlesWidget: (v, _) => Text(
+                                        v >= 1000
+                                            ? '₹${(v / 1000).toStringAsFixed(0)}k'
+                                            : '₹${v.toInt()}',
                                         style: const TextStyle(
-                                            fontSize: 10,
+                                            fontSize: 9,
                                             color: AppTheme.greyText),
-                                      );
-                                    },
-                                  ),
-                                ),
-                                leftTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    getTitlesWidget: (v, _) => Text(
-                                      '₹${(v / 1000).toStringAsFixed(0)}k',
-                                      style: const TextStyle(
-                                          fontSize: 9,
-                                          color: AppTheme.greyText),
-                                    ),
-                                    reservedSize: 36,
-                                  ),
-                                ),
-                                topTitles: const AxisTitles(
-                                    sideTitles:
-                                        SideTitles(showTitles: false)),
-                                rightTitles: const AxisTitles(
-                                    sideTitles:
-                                        SideTitles(showTitles: false)),
-                              ),
-                              gridData: FlGridData(
-                                show: true,
-                                horizontalInterval: 2500,
-                                getDrawingHorizontalLine: (v) => FlLine(
-                                  color: Colors.grey.shade200,
-                                  strokeWidth: 1,
-                                ),
-                              ),
-                              borderData: FlBorderData(show: false),
-                              barGroups: List.generate(
-                                12,
-                                (i) => BarChartGroupData(
-                                  x: i,
-                                  barRods: [
-                                    BarChartRodData(
-                                      toY: _mockMonthlyData[i],
-                                      color: i == DateTime.now().month - 1
-                                          ? AppTheme.primaryGreen
-                                          : AppTheme.primaryGreenLight
-                                              .withValues(alpha: 0.5),
-                                      width: 14,
-                                      borderRadius: const BorderRadius.only(
-                                        topLeft: Radius.circular(4),
-                                        topRight: Radius.circular(4),
                                       ),
+                                      reservedSize: 40,
                                     ),
-                                  ],
+                                  ),
+                                  topTitles: const AxisTitles(
+                                      sideTitles: SideTitles(showTitles: false)),
+                                  rightTitles: const AxisTitles(
+                                      sideTitles: SideTitles(showTitles: false)),
+                                ),
+                                gridData: FlGridData(
+                                  show: true,
+                                  horizontalInterval: maxY / 4,
+                                  getDrawingHorizontalLine: (v) => FlLine(
+                                    color: Colors.grey.shade200,
+                                    strokeWidth: 1,
+                                  ),
+                                ),
+                                borderData: FlBorderData(show: false),
+                                barGroups: List.generate(
+                                  12,
+                                  (i) => BarChartGroupData(
+                                    x: i,
+                                    barRods: [
+                                      BarChartRodData(
+                                        toY: monthly[i],
+                                        color: i == DateTime.now().month - 1
+                                            ? AppTheme.primaryGreen
+                                            : AppTheme.primaryGreenLight
+                                                .withValues(alpha: 0.6),
+                                        width: 14,
+                                        borderRadius: const BorderRadius.only(
+                                          topLeft: Radius.circular(4),
+                                          topRight: Radius.circular(4),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
+                            );
+                          }),
                         ),
                       ),
                     ),
@@ -295,11 +316,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
     );
   }
 
-  // Dummy monthly data for chart
-  final List<double> _mockMonthlyData = [
-    3200, 4500, 2800, 6200, 5100, 7800,
-    4300, 8900, 6700, 5400, 9200, 7100,
-  ];
+  // (mock data removed — chart now uses real monthly_earnings from DB)
 
   Widget _payoutRow(String label, String value) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),

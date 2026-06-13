@@ -2,8 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/app_theme.dart';
+import '../../utils/constants.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/loading_button.dart';
 
@@ -15,26 +17,51 @@ class FarmerProfileScreen extends StatefulWidget {
 }
 
 class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
+  final _nameController    = TextEditingController();
+  final _phoneController   = TextEditingController();
   final _addressController = TextEditingController();
-  final _cityController = TextEditingController();
+  final _cityController    = TextEditingController();
   bool _isEditing = false;
-  bool _isSaving = false;
+  bool _isSaving  = false;
+
+  // Dynamic stats
+  int  _totalBookings = 0;
+  bool _statsLoading  = true;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadStats();
   }
 
   void _loadProfile() {
     final user = context.read<AuthProvider>().currentUser;
     if (user != null) {
-      _nameController.text = user.fullName;
-      _phoneController.text = user.phone ?? '';
+      _nameController.text    = user.fullName;
+      _phoneController.text   = user.phone ?? '';
       _addressController.text = user.address ?? '';
-      _cityController.text = user.city ?? '';
+      _cityController.text    = user.city ?? '';
+    }
+  }
+
+  Future<void> _loadStats() async {
+    final user = context.read<AuthProvider>().currentUser;
+    if (user == null) { setState(() => _statsLoading = false); return; }
+    try {
+      final client = Supabase.instance.client;
+      final bookingsRes = await client
+          .from(AppConstants.bookingsTable)
+          .select('id')
+          .eq('farmer_id', user.id);
+      if (mounted) {
+        setState(() {
+          _totalBookings = (bookingsRes as List).length;
+          _statsLoading  = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _statsLoading = false);
     }
   }
 
@@ -49,18 +76,15 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
 
   Future<void> _saveProfile() async {
     setState(() => _isSaving = true);
-    final auth = context.read<AuthProvider>();
+    final auth    = context.read<AuthProvider>();
     final success = await auth.updateProfile({
       'full_name': _nameController.text.trim(),
-      'phone': _phoneController.text.trim(),
-      'address': _addressController.text.trim(),
-      'city': _cityController.text.trim(),
+      'phone':     _phoneController.text.trim(),
+      'address':   _addressController.text.trim(),
+      'city':      _cityController.text.trim(),
     });
     if (mounted) {
-      setState(() {
-        _isSaving = false;
-        _isEditing = !success;
-      });
+      setState(() { _isSaving = false; _isEditing = !success; });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(success ? 'Profile updated!' : 'Update failed'),
         backgroundColor: success ? AppTheme.successGreen : AppTheme.errorRed,
@@ -88,6 +112,15 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
       await context.read<AuthProvider>().logout();
       if (mounted) context.go('/login');
     }
+  }
+
+  /// Shows year if >1 year old, months if <1 year, days if <1 month.
+  String _memberSince(DateTime createdAt) {
+    final now  = DateTime.now();
+    final diff = now.difference(createdAt);
+    if (diff.inDays >= 365) return '${createdAt.year}';
+    if (diff.inDays >= 30)  return '${(diff.inDays / 30).floor()} mo';
+    return '${diff.inDays} days';
   }
 
   @override
@@ -133,24 +166,19 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
                         child: Text(
                           (user?.fullName ?? 'F')[0].toUpperCase(),
                           style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 40,
-                            fontWeight: FontWeight.bold,
+                            color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
                       if (_isEditing)
                         Positioned(
-                          bottom: 0,
-                          right: 0,
+                          bottom: 0, right: 0,
                           child: Container(
                             padding: const EdgeInsets.all(6),
                             decoration: const BoxDecoration(
-                              color: AppTheme.accentAmber,
-                              shape: BoxShape.circle,
+                              color: AppTheme.accentAmber, shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.camera_alt,
-                                size: 18, color: Colors.white),
+                            child: const Icon(Icons.camera_alt, size: 18, color: Colors.white),
                           ),
                         ),
                     ],
@@ -158,11 +186,7 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
                   const SizedBox(height: 16),
                   Text(
                     user?.fullName ?? '',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
                   Container(
@@ -171,36 +195,39 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
                       color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Text(
-                      '🌾 Farmer',
-                      style: TextStyle(color: Colors.white, fontSize: 13),
-                    ),
+                    child: const Text('🌾 Farmer', style: TextStyle(color: Colors.white, fontSize: 13)),
                   ),
                 ],
               ),
             ),
 
-            // ── Stats Row ────────────────────────────────────
+            // ── Dynamic Stats Row ────────────────────────────
             Container(
               margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8),
-                ],
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _statItem('Member Since', '2024'),
-                  _divider(),
-                  _statItem('Total Bookings', '12'),
-                  _divider(),
-                  _statItem('State', user?.state ?? 'N/A'),
-                ],
-              ),
+              child: _statsLoading
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _statItem('Member Since',
+                            user != null ? _memberSince(user.createdAt) : '—'),
+                        _divider(),
+                        _statItem('Total Bookings', '$_totalBookings'),
+                        _divider(),
+                        _statItem('State', user?.state ?? 'N/A'),
+                      ],
+                    ),
             ),
 
             // ── Edit Form ────────────────────────────────────
@@ -209,66 +236,47 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Personal Information',
-                      style: Theme.of(context).textTheme.titleLarge),
+                  Text('Personal Information', style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 16),
                   CustomTextField(
-                    controller: _nameController,
-                    label: 'Full Name',
-                    prefixIcon: Icons.person_outline,
-                    readOnly: !_isEditing,
+                    controller: _nameController, label: 'Full Name',
+                    prefixIcon: Icons.person_outline, readOnly: !_isEditing,
                     textCapitalization: TextCapitalization.words,
                   ),
                   const SizedBox(height: 12),
                   CustomTextField(
-                    controller: _phoneController,
-                    label: 'Phone Number',
-                    prefixIcon: Icons.phone_outlined,
-                    readOnly: !_isEditing,
+                    controller: _phoneController, label: 'Phone Number',
+                    prefixIcon: Icons.phone_outlined, readOnly: !_isEditing,
                     keyboardType: TextInputType.phone,
                   ),
                   const SizedBox(height: 12),
                   CustomTextField(
-                    controller: _cityController,
-                    label: 'City',
-                    prefixIcon: Icons.location_city_outlined,
-                    readOnly: !_isEditing,
+                    controller: _cityController, label: 'City',
+                    prefixIcon: Icons.location_city_outlined, readOnly: !_isEditing,
                   ),
                   const SizedBox(height: 12),
                   CustomTextField(
-                    controller: _addressController,
-                    label: 'Address',
-                    prefixIcon: Icons.home_outlined,
-                    readOnly: !_isEditing,
-                    maxLines: 2,
+                    controller: _addressController, label: 'Address',
+                    prefixIcon: Icons.home_outlined, readOnly: !_isEditing, maxLines: 2,
                   ),
 
                   if (_isEditing) ...[
                     const SizedBox(height: 20),
                     LoadingButton(
-                      label: 'Save Changes',
-                      isLoading: _isSaving,
-                      onPressed: _saveProfile,
+                      label: 'Save Changes', isLoading: _isSaving, onPressed: _saveProfile,
                     ),
                   ],
 
                   const SizedBox(height: 24),
                   const Divider(),
                   const SizedBox(height: 8),
-
-                  // ── Menu Items ────────────────────────────
                   _menuItem(Icons.help_outline, 'Help & Support', () {}),
                   _menuItem(Icons.privacy_tip_outlined, 'Privacy Policy', () {}),
                   _menuItem(Icons.info_outline, 'About AgriRent', () {}),
                   const SizedBox(height: 8),
                   const Divider(),
                   const SizedBox(height: 8),
-                  _menuItem(
-                    Icons.logout,
-                    'Logout',
-                    _logout,
-                    color: AppTheme.errorRed,
-                  ),
+                  _menuItem(Icons.logout, 'Logout', _logout, color: AppTheme.errorRed),
                   const SizedBox(height: 40),
                 ],
               ),
@@ -280,27 +288,18 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
   }
 
   Widget _statItem(String label, String value) => Column(
-        children: [
-          Text(value,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: AppTheme.primaryGreen,
-              )),
-          const SizedBox(height: 4),
-          Text(label,
-              style: const TextStyle(color: AppTheme.greyText, fontSize: 12)),
-        ],
-      );
+    children: [
+      Text(value,
+          style: const TextStyle(
+              fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.primaryGreen)),
+      const SizedBox(height: 4),
+      Text(label, style: const TextStyle(color: AppTheme.greyText, fontSize: 12)),
+    ],
+  );
 
-  Widget _divider() => Container(
-        height: 36,
-        width: 1,
-        color: Colors.grey.shade200,
-      );
+  Widget _divider() => Container(height: 36, width: 1, color: Colors.grey.shade200);
 
-  Widget _menuItem(IconData icon, String label, VoidCallback onTap,
-      {Color? color}) {
+  Widget _menuItem(IconData icon, String label, VoidCallback onTap, {Color? color}) {
     return ListTile(
       leading: Container(
         padding: const EdgeInsets.all(8),
@@ -311,12 +310,8 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
         child: Icon(icon, color: color ?? AppTheme.primaryGreen, size: 20),
       ),
       title: Text(label,
-          style: TextStyle(
-            color: color ?? AppTheme.black,
-            fontWeight: FontWeight.w500,
-          )),
-      trailing: Icon(Icons.arrow_forward_ios,
-          size: 14, color: Colors.grey.shade400),
+          style: TextStyle(color: color ?? AppTheme.black, fontWeight: FontWeight.w500)),
+      trailing: Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey.shade400),
       onTap: onTap,
       contentPadding: EdgeInsets.zero,
     );

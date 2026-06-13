@@ -116,27 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const Text("Don't have an account? "),
                   TextButton(onPressed: () => context.go('/register'), child: const Text('Register Now')),
                 ]),
-                const SizedBox(height: 16),
-                // Demo credentials helper
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppTheme.lightGreen, borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.primaryGreenLight),
-                  ),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Demo Credentials',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(color: AppTheme.primaryGreenDark)),
-                    const SizedBox(height: 8),
-                    _cred('Farmer', 'farmer@agrirent.com'),
-                    _cred('Owner',  'owner@agrirent.com'),
-                    _cred('Admin',  'admin@agrirent.com'),
-                    const SizedBox(height: 4),
-                    const Text('Password: demo@1234',
-                        style: TextStyle(color: AppTheme.greyText, fontStyle: FontStyle.italic, fontSize: 12)),
-                  ]),
-                ),
+
               ]),
             ),
           ),
@@ -145,11 +125,4 @@ class _LoginScreenState extends State<LoginScreen> {
     ),
   );
 
-  Widget _cred(String role, String email) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 2),
-    child: Row(children: [
-      const Text('\$role: ', style: TextStyle(fontWeight: FontWeight.w600, color: AppTheme.primaryGreen, fontSize: 13)),
-      Text(email, style: const TextStyle(color: AppTheme.greyText, fontSize: 13)),
-    ]),
-  );
 }

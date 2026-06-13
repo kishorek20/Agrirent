@@ -2,8 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/app_theme.dart';
+import '../../utils/constants.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/loading_button.dart';
 
@@ -15,26 +17,76 @@ class OwnerProfileScreen extends StatefulWidget {
 }
 
 class _OwnerProfileScreenState extends State<OwnerProfileScreen> {
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
+  final _nameController    = TextEditingController();
+  final _phoneController   = TextEditingController();
   final _addressController = TextEditingController();
-  final _cityController = TextEditingController();
+  final _cityController    = TextEditingController();
   bool _isEditing = false;
-  bool _isSaving = false;
+  bool _isSaving  = false;
+
+  // Dynamic stats
+  int    _totalVehicles = 0;
+  int    _totalBookings = 0;
+  double _avgRating     = 0.0;
+  bool   _statsLoading  = true;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadStats();
   }
 
   void _loadProfile() {
     final user = context.read<AuthProvider>().currentUser;
     if (user != null) {
-      _nameController.text = user.fullName;
-      _phoneController.text = user.phone ?? '';
+      _nameController.text    = user.fullName;
+      _phoneController.text   = user.phone ?? '';
       _addressController.text = user.address ?? '';
-      _cityController.text = user.city ?? '';
+      _cityController.text    = user.city ?? '';
+    }
+  }
+
+  Future<void> _loadStats() async {
+    final user = context.read<AuthProvider>().currentUser;
+    if (user == null) { setState(() => _statsLoading = false); return; }
+    try {
+      final client = Supabase.instance.client;
+
+      // Count owner's vehicles
+      final vehiclesRes = await client
+          .from(AppConstants.vehiclesTable)
+          .select('id, average_rating')
+          .eq('owner_id', user.id);
+
+      // Count bookings where this user is the owner
+      final bookingsRes = await client
+          .from(AppConstants.bookingsTable)
+          .select('id')
+          .eq('owner_id', user.id);
+
+      final vehicles = vehiclesRes as List;
+      final bookings = bookingsRes as List;
+
+      // Compute average rating across all owner's vehicles
+      double avgRating = 0.0;
+      if (vehicles.isNotEmpty) {
+        final total = vehicles
+            .map((v) => (v['average_rating'] as num?)?.toDouble() ?? 0.0)
+            .fold(0.0, (a, b) => a + b);
+        avgRating = total / vehicles.length;
+      }
+
+      if (mounted) {
+        setState(() {
+          _totalVehicles = vehicles.length;
+          _totalBookings = bookings.length;
+          _avgRating     = avgRating;
+          _statsLoading  = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _statsLoading = false);
     }
   }
 
@@ -49,24 +101,19 @@ class _OwnerProfileScreenState extends State<OwnerProfileScreen> {
 
   Future<void> _saveProfile() async {
     setState(() => _isSaving = true);
-    final auth = context.read<AuthProvider>();
+    final auth    = context.read<AuthProvider>();
     final success = await auth.updateProfile({
       'full_name': _nameController.text.trim(),
-      'phone': _phoneController.text.trim(),
-      'address': _addressController.text.trim(),
-      'city': _cityController.text.trim(),
+      'phone':     _phoneController.text.trim(),
+      'address':   _addressController.text.trim(),
+      'city':      _cityController.text.trim(),
     });
     if (mounted) {
-      setState(() {
-        _isSaving = false;
-        if (success) _isEditing = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(success ? 'Profile updated!' : 'Update failed'),
-          backgroundColor: success ? AppTheme.successGreen : AppTheme.errorRed,
-        ),
-      );
+      setState(() { _isSaving = false; if (success) _isEditing = false; });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(success ? 'Profile updated!' : 'Update failed'),
+        backgroundColor: success ? AppTheme.successGreen : AppTheme.errorRed,
+      ));
     }
   }
 
@@ -95,6 +142,11 @@ class _OwnerProfileScreenState extends State<OwnerProfileScreen> {
     }
   }
 
+  String _ratingLabel() {
+    if (_totalVehicles == 0) return 'N/A';
+    return '${_avgRating.toStringAsFixed(1)}⭐';
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().currentUser;
@@ -112,17 +164,14 @@ class _OwnerProfileScreenState extends State<OwnerProfileScreen> {
           if (_isEditing)
             TextButton(
               onPressed: () => setState(() => _isEditing = false),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(color: Colors.white),
-              ),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white)),
             ),
         ],
       ),
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Header
+            // ── Header ──────────────────────────────────────
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(32),
@@ -139,9 +188,7 @@ class _OwnerProfileScreenState extends State<OwnerProfileScreen> {
                     child: Text(
                       (user?.fullName ?? 'O')[0].toUpperCase(),
                       style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 40,
-                        fontWeight: FontWeight.bold,
+                        color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
@@ -149,17 +196,12 @@ class _OwnerProfileScreenState extends State<OwnerProfileScreen> {
                   Text(
                     user?.fullName ?? '',
                     style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
+                      color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(20),
@@ -176,10 +218,8 @@ class _OwnerProfileScreenState extends State<OwnerProfileScreen> {
                       children: [
                         Icon(Icons.verified, color: Colors.white70, size: 16),
                         SizedBox(width: 4),
-                        Text(
-                          'Verified Owner',
-                          style: TextStyle(color: Colors.white70, fontSize: 13),
-                        ),
+                        Text('Verified Owner',
+                            style: TextStyle(color: Colors.white70, fontSize: 13)),
                       ],
                     ),
                   ],
@@ -187,7 +227,7 @@ class _OwnerProfileScreenState extends State<OwnerProfileScreen> {
               ),
             ),
 
-            // Quick Stats
+            // ── Dynamic Stats Row ────────────────────────────
             Container(
               margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.all(16),
@@ -195,22 +235,26 @@ class _OwnerProfileScreenState extends State<OwnerProfileScreen> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 8,
-                  ),
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8),
                 ],
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _statItem('Vehicles', '5'),
-                  _divider(),
-                  _statItem('Bookings', '24'),
-                  _divider(),
-                  _statItem('Rating', '4.8⭐'),
-                ],
-              ),
+              child: _statsLoading
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _statItem('Vehicles',  '$_totalVehicles'),
+                        _divider(),
+                        _statItem('Bookings',  '$_totalBookings'),
+                        _divider(),
+                        _statItem('Rating',    _ratingLabel()),
+                      ],
+                    ),
             ),
 
             Padding(
@@ -218,49 +262,35 @@ class _OwnerProfileScreenState extends State<OwnerProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Profile Information',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
+                  Text('Profile Information', style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 16),
 
                   CustomTextField(
-                    controller: _nameController,
-                    label: 'Full Name',
-                    prefixIcon: Icons.person_outline,
-                    readOnly: !_isEditing,
+                    controller: _nameController, label: 'Full Name',
+                    prefixIcon: Icons.person_outline, readOnly: !_isEditing,
                     textCapitalization: TextCapitalization.words,
                   ),
                   const SizedBox(height: 12),
                   CustomTextField(
-                    controller: _phoneController,
-                    label: 'Phone Number',
-                    prefixIcon: Icons.phone_outlined,
-                    readOnly: !_isEditing,
+                    controller: _phoneController, label: 'Phone Number',
+                    prefixIcon: Icons.phone_outlined, readOnly: !_isEditing,
                     keyboardType: TextInputType.phone,
                   ),
                   const SizedBox(height: 12),
                   CustomTextField(
-                    controller: _cityController,
-                    label: 'City',
-                    prefixIcon: Icons.location_city_outlined,
-                    readOnly: !_isEditing,
+                    controller: _cityController, label: 'City',
+                    prefixIcon: Icons.location_city_outlined, readOnly: !_isEditing,
                   ),
                   const SizedBox(height: 12),
                   CustomTextField(
-                    controller: _addressController,
-                    label: 'Address',
-                    prefixIcon: Icons.home_outlined,
-                    readOnly: !_isEditing,
-                    maxLines: 2,
+                    controller: _addressController, label: 'Address',
+                    prefixIcon: Icons.home_outlined, readOnly: !_isEditing, maxLines: 2,
                   ),
 
                   if (_isEditing) ...[
                     const SizedBox(height: 20),
                     LoadingButton(
-                      label: 'Save Changes',
-                      isLoading: _isSaving,
-                      onPressed: _saveProfile,
+                      label: 'Save Changes', isLoading: _isSaving, onPressed: _saveProfile,
                     ),
                   ],
 
@@ -271,20 +301,11 @@ class _OwnerProfileScreenState extends State<OwnerProfileScreen> {
                   _menuItem(Icons.account_balance, 'Bank Account', () {}),
                   _menuItem(Icons.description, 'Documents', () {}),
                   _menuItem(Icons.help_outline, 'Help & Support', () {}),
-                  _menuItem(
-                    Icons.privacy_tip_outlined,
-                    'Privacy Policy',
-                    () {},
-                  ),
+                  _menuItem(Icons.privacy_tip_outlined, 'Privacy Policy', () {}),
                   const SizedBox(height: 8),
                   const Divider(),
                   const SizedBox(height: 8),
-                  _menuItem(
-                    Icons.logout,
-                    'Logout',
-                    _logout,
-                    color: AppTheme.errorRed,
-                  ),
+                  _menuItem(Icons.logout, 'Logout', _logout, color: AppTheme.errorRed),
                   const SizedBox(height: 40),
                 ],
               ),
@@ -297,31 +318,17 @@ class _OwnerProfileScreenState extends State<OwnerProfileScreen> {
 
   Widget _statItem(String label, String value) => Column(
     children: [
-      Text(
-        value,
-        style: const TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: 18,
-          color: AppTheme.primaryGreen,
-        ),
-      ),
+      Text(value,
+          style: const TextStyle(
+              fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.primaryGreen)),
       const SizedBox(height: 4),
-      Text(
-        label,
-        style: const TextStyle(color: AppTheme.greyText, fontSize: 12),
-      ),
+      Text(label, style: const TextStyle(color: AppTheme.greyText, fontSize: 12)),
     ],
   );
 
-  Widget _divider() =>
-      Container(height: 36, width: 1, color: Colors.grey.shade200);
+  Widget _divider() => Container(height: 36, width: 1, color: Colors.grey.shade200);
 
-  Widget _menuItem(
-    IconData icon,
-    String label,
-    VoidCallback onTap, {
-    Color? color,
-  }) {
+  Widget _menuItem(IconData icon, String label, VoidCallback onTap, {Color? color}) {
     return ListTile(
       leading: Container(
         padding: const EdgeInsets.all(8),
@@ -331,18 +338,9 @@ class _OwnerProfileScreenState extends State<OwnerProfileScreen> {
         ),
         child: Icon(icon, color: color ?? AppTheme.primaryGreen, size: 20),
       ),
-      title: Text(
-        label,
-        style: TextStyle(
-          color: color ?? AppTheme.black,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      trailing: Icon(
-        Icons.arrow_forward_ios,
-        size: 14,
-        color: Colors.grey.shade400,
-      ),
+      title: Text(label,
+          style: TextStyle(color: color ?? AppTheme.black, fontWeight: FontWeight.w500)),
+      trailing: Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey.shade400),
       onTap: onTap,
       contentPadding: EdgeInsets.zero,
     );

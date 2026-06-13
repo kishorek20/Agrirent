@@ -66,20 +66,54 @@ class BookingService {
   }
 
   /// Summarise paid earnings for a given owner.
+  /// Returns: total_earnings, this_month, total_bookings,
+  ///          monthly_earnings (List<double> index 0=Jan…11=Dec for current year),
+  ///          avg_rating (double).
   Future<Map<String, dynamic>> getOwnerEarnings(String ownerId) async {
-    final rows = await _svc.client.from(AppConstants.bookingsTable)
+    // ── Bookings (paid) ───────────────────────────────────────
+    final rows = await _svc.client
+        .from(AppConstants.bookingsTable)
         .select('total_amount, created_at')
         .eq('owner_id', ownerId)
         .eq('payment_status', 'paid');
-    final list  = rows as List;
-    final now   = DateTime.now();
-    double total = 0, month = 0;
+    final list = rows as List;
+    final now  = DateTime.now();
+
+    double total = 0, thisMonth = 0;
+    final monthly = List<double>.filled(12, 0.0); // index 0 = Jan
+
     for (final b in list) {
       final amt = (b['total_amount'] ?? 0).toDouble();
       total += amt;
       final dt = DateTime.parse(b['created_at']);
-      if (dt.year == now.year && dt.month == now.month) month += amt;
+      if (dt.year == now.year) {
+        monthly[dt.month - 1] += amt;
+        if (dt.month == now.month) thisMonth += amt;
+      }
     }
-    return {'total_earnings': total, 'this_month': month, 'total_bookings': list.length};
+
+    // ── Average rating across all owner vehicles ──────────────
+    double avgRating = 0.0;
+    try {
+      final vehicles = await _svc.client
+          .from(AppConstants.vehiclesTable)
+          .select('average_rating')
+          .eq('owner_id', ownerId);
+      final vList = vehicles as List;
+      if (vList.isNotEmpty) {
+        final sum = vList
+            .map((v) => (v['average_rating'] as num?)?.toDouble() ?? 0.0)
+            .fold(0.0, (a, b) => a + b);
+        avgRating = sum / vList.length;
+      }
+    } catch (_) {}
+
+    return {
+      'total_earnings': total,
+      'this_month':     thisMonth,
+      'total_bookings': list.length,
+      'monthly_earnings': monthly,   // List<double>, 12 items
+      'avg_rating':     avgRating,   // double
+    };
   }
 }
