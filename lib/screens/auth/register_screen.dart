@@ -41,7 +41,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
     if (!mounted) return;
     if (ok) {
-      context.go(auth.userRole == 'owner' ? '/owner/home' : '/farmer/home');
+      // Registration complete — always redirect to login
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Account created! Please sign in.'),
+        backgroundColor: AppTheme.primaryGreen,
+        duration: Duration(seconds: 3),
+      ));
+      context.go('/login');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(auth.errorMessage ?? 'Registration failed'),

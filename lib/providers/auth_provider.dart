@@ -48,15 +48,34 @@ class AuthProvider extends ChangeNotifier {
     _setLoading();
     try {
       final res = await _svc.signUp(email: email, password: password);
+
+      // signUp on a rate-limited or duplicate call still returns an
+      // identityData-less user — treat null user as hard failure.
       if (res.user == null) { _setError('Registration failed'); return false; }
-      await _svc.createUserProfile(
-        authId: res.user!.id, fullName: fullName, email: email,
-        phone: phone, role: role, city: city, state: state,
-      );
-      _user   = await _svc.getCurrentUserProfile();
-      _status = AuthStatus.authenticated;
+
+      // Try to insert the profile row. If it already exists (duplicate signup
+      // attempt) we catch and ignore the unique-violation — the account was
+      // already created on a previous attempt.
+      try {
+        await _svc.createUserProfile(
+          authId: res.user!.id, fullName: fullName, email: email,
+          phone: phone, role: role, city: city, state: state,
+        );
+      } catch (profileErr) {
+        final msg = profileErr.toString();
+        // Ignore unique-constraint violations (profile row already exists).
+        if (!msg.contains('duplicate') && !msg.contains('unique') && !msg.contains('23505')) {
+          rethrow;
+        }
+      }
+
+      // Always sign out so the user MUST sign in manually — this avoids
+      // landing on a home screen with a half-initialised session.
+      await _svc.signOut();
+      _user   = null;
+      _status = AuthStatus.unauthenticated;
       notifyListeners();
-      return true;
+      return true; // tells the UI to navigate to /login
     } catch (e) {
       _setError(_friendly(e.toString()));
       return false;
@@ -101,10 +120,16 @@ class AuthProvider extends ChangeNotifier {
 
   String _friendly(String e) {
     if (e.contains('invalid_credentials')) return 'Invalid email or password.';
-    if (e.contains('already registered') || e.contains('already exists')) {
+    if (e.contains('email_not_confirmed') || e.contains('Email not confirmed')) {
+      return 'Please verify your email before signing in.';
+    }
+    if (e.contains('over_email_send_rate_limit') || e.contains('rate_limit') || e.contains('429')) {
+      return 'Too many requests. Please wait a minute and try again.';
+    }
+    if (e.contains('already registered') || e.contains('already exists') || e.contains('23505')) {
       return 'An account with this email already exists.';
     }
-    if (e.contains('network')) return 'No internet connection.';
+    if (e.contains('network') || e.contains('SocketException')) return 'No internet connection.';
     return 'Something went wrong. Please try again.';
   }
 }
