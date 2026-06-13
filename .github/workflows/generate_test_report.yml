@@ -2,10 +2,8 @@ name: Generate Test Report Excel
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'AgriRent_Full_Functionality_Test_Report.csv'   # run when CSV changes
-  workflow_dispatch:                                      # allow manual trigger
+    branches: [main]        # run on every push to main
+  workflow_dispatch:        # allow manual trigger from GitHub UI
 
 jobs:
   build-excel:
