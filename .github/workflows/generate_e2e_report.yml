@@ -1,0 +1,43 @@
+name: Generate Appium E2E Excel Report
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  generate-report:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install openpyxl
+
+      - name: Generate E2E Excel Report
+        run: |
+          # Create the test directory if it doesn't exist
+          mkdir -p test
+          # Run the python script to generate the Appium E2E exhaustive excel report
+          python test/generate_exhaustive_e2e_excel.py
+
+      - name: Upload Excel Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Appium-E2E-Excel-Report
+          path: test/Appium_Exhaustive_Screen_E2E_Report.xlsx
+          retention-days: 14
