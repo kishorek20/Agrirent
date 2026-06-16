@@ -104,11 +104,25 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> resetPassword(String email) async {
+  Future<bool> resetPassword(String email, {String? redirectTo}) async {
     _setLoading();
     try {
-      await _svc.resetPassword(email);
+      await _svc.resetPassword(email, redirectTo: redirectTo);
       _status = AuthStatus.unauthenticated;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setError(_friendly(e.toString()));
+      return false;
+    }
+  }
+
+  Future<bool> updatePassword(String newPassword) async {
+    _setLoading();
+    try {
+      await _svc.updatePassword(newPassword);
+      // Wait for auth state to settle
+      _status = AuthStatus.authenticated; 
       notifyListeners();
       return true;
     } catch (e) {

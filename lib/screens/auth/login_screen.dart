@@ -1,4 +1,5 @@
 // lib/screens/auth/login_screen.dart
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -42,8 +43,51 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _forgotPassword() async {
-    final email = _emailCtrl.text.trim();
+    final resetEmailCtrl = TextEditingController(text: _emailCtrl.text.trim());
+    final email = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Reset Password'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Enter your email address to receive a password reset link.'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: resetEmailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: 'Email Address',
+                  hintText: 'Enter your email',
+                  prefixIcon: const Icon(Icons.email_outlined),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, resetEmailCtrl.text.trim()),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryGreen,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Send Link'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (email == null) return; // User cancelled
+
     if (email.isEmpty || !email.contains('@')) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Please enter a valid email to reset password'),
         backgroundColor: AppTheme.errorRed,
@@ -51,8 +95,14 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     
+    if (!mounted) return;
     final auth = context.read<AuthProvider>();
-    final ok = await auth.resetPassword(email);
+    
+    // In Flutter Web with hash routing, we need to explicitly provide a redirectTo 
+    // URL so Supabase knows where to return to after email verification.
+    final currentUrl = kIsWeb ? '${Uri.base.origin}/#/update-password' : null;
+    
+    final ok = await auth.resetPassword(email, redirectTo: currentUrl);
     if (!mounted) return;
     
     if (ok) {

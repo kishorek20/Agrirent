@@ -32,8 +32,11 @@ class SupabaseService {
 
   Future<void> signOut() => client.auth.signOut();
 
-  Future<void> resetPassword(String email) =>
-      client.auth.resetPasswordForEmail(email);
+  Future<void> resetPassword(String email, {String? redirectTo}) =>
+      client.auth.resetPasswordForEmail(email, redirectTo: redirectTo);
+
+  Future<UserResponse> updatePassword(String newPassword) =>
+      client.auth.updateUser(UserAttributes(password: newPassword));
 
   /// Insert a new profile row linked to the just-created auth user.
   Future<void> createUserProfile({

@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../screens/auth/splash_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
+import '../screens/auth/update_password_screen.dart';
 import '../screens/farmer/farmer_home_screen.dart';
 import '../screens/farmer/search_vehicles_screen.dart';
 import '../screens/farmer/vehicle_detail_screen.dart';
@@ -27,7 +28,7 @@ import '../screens/shared/notifications_screen.dart';
 import 'app_theme.dart';
 
 class AppRouter {
-  static const _publicPaths = ['/splash', '/login', '/register'];
+  static const _publicPaths = ['/splash', '/login', '/register', '/update-password'];
 
   static final GoRouter router = GoRouter(
     initialLocation: '/splash',
@@ -36,6 +37,7 @@ class AppRouter {
       GoRoute(path: '/splash',   builder: (_, __) => const SplashScreen()),
       GoRoute(path: '/login',    builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
+      GoRoute(path: '/update-password', builder: (_, __) => const UpdatePasswordScreen()),
 
       // Farmer shell
       ShellRoute(
@@ -94,7 +96,7 @@ class AppRouter {
     if (!auth.isAuthenticated) return pub ? null : '/login';
 
     // Logged in on a public page — redirect to role home
-    if (pub) return _home(auth.userRole);
+    if (pub && loc != '/update-password') return _home(auth.userRole);
 
     // Prevent cross-role navigation
     final role = auth.userRole;
