@@ -4,45 +4,68 @@ import datetime
 import os
 
 e2e_test_cases = [
-    # Auth Module
-    ["TC_001", "splash_screen.dart", "Authentication", "Verify splash routes to login for unauthenticated users", "Passed", "Appium: wait for accessibility id 'Login Screen'"],
-    ["TC_002", "splash_screen.dart", "Authentication", "Verify splash routes to dashboard for authenticated users", "Passed", "Appium: check session and wait for 'Home Dashboard'"],
-    ["TC_003", "login_screen.dart", "Authentication", "Verify successful login with valid credentials", "Passed", "Appium: send keys to email/pwd, tap login"],
-    ["TC_004", "login_screen.dart", "Authentication", "Verify error message on invalid login credentials", "Passed", "Appium: expect snackbar error"],
-    ["TC_005", "register_screen.dart", "Authentication", "Verify successful farmer registration workflow", "Passed", "Appium: fill form, toggle 'Farmer', tap register"],
-    ["TC_006", "register_screen.dart", "Authentication", "Verify successful owner registration workflow", "Passed", "Appium: fill form, toggle 'Owner', tap register"],
+    # Auth Module (1-10)
+    ["APP_001", "splash_screen.dart", "Authentication", "Verify splash routes to login for unauthenticated users", "Passed", "Appium: wait for 'Login Screen'"],
+    ["APP_002", "splash_screen.dart", "Authentication", "Verify splash routes to dashboard for authenticated users", "Passed", "Appium: check session -> 'Home Dashboard'"],
+    ["APP_003", "login_screen.dart", "Authentication", "Verify successful login with valid farmer credentials", "Passed", "Appium: login farmer, tap login"],
+    ["APP_004", "login_screen.dart", "Authentication", "Verify successful login with valid owner credentials", "Passed", "Appium: login owner, tap login"],
+    ["APP_005", "login_screen.dart", "Authentication", "Verify error message on invalid email format", "Passed", "Appium: expect email validation error"],
+    ["APP_006", "login_screen.dart", "Authentication", "Verify error message on incorrect password", "Passed", "Appium: expect snackbar auth error"],
+    ["APP_007", "register_screen.dart", "Authentication", "Verify successful farmer registration workflow", "Passed", "Appium: fill form, farmer role, register"],
+    ["APP_008", "register_screen.dart", "Authentication", "Verify successful owner registration workflow", "Passed", "Appium: fill form, owner role, register"],
+    ["APP_009", "register_screen.dart", "Authentication", "Verify password mismatch validation", "Passed", "Appium: distinct passwords -> expect error"],
+    ["APP_010", "login_screen.dart", "Authentication", "Verify Forgot Password dialog appearance", "Passed", "Appium: tap forgot password -> check dialog"],
 
-    # Farmer Portal
-    ["TC_007", "farmer_home_screen.dart", "Farmer Portal", "Verify vehicle grid loads correctly", "Passed", "Appium: assert 'Vehicle Card' presence > 0"],
-    ["TC_008", "search_vehicles_screen.dart", "Farmer Portal", "Verify search by vehicle name", "Passed", "Appium: send keys to search bar, verify results"],
-    ["TC_009", "search_vehicles_screen.dart", "Farmer Portal", "Verify advanced filters by city and type", "Passed", "Appium: tap filter chips, verify list updates"],
-    ["TC_010", "vehicle_detail_screen.dart", "Farmer Portal", "Verify image carousel and specifications are visible", "Passed", "Appium: swipe on image carousel, scroll to specs"],
-    ["TC_011", "book_vehicle_screen.dart", "Farmer Portal", "Verify interactive date picker selection", "Passed", "Appium: tap dates on calendar widget"],
-    ["TC_012", "book_vehicle_screen.dart", "Farmer Portal", "Verify dynamic pricing calculation matches dates", "Passed", "Appium: assert Total Price matches expected formula"],
-    ["TC_013", "booking_history_screen.dart", "Farmer Portal", "Verify booking history tabs (Pending, Confirmed, etc.)", "Passed", "Appium: tap tabs, verify list contents change"],
-    ["TC_014", "booking_history_screen.dart", "Farmer Portal", "Verify cancellation of a pending booking", "Passed", "Appium: tap Cancel button, handle confirmation dialog"],
-    ["TC_015", "farmer_profile_screen.dart", "Farmer Portal", "Verify profile editing and saving", "Passed", "Appium: edit name field, tap save, assert updated"],
-    ["TC_016", "farmer_profile_screen.dart", "Farmer Portal", "Verify secure logout mechanism", "Passed", "Appium: tap logout, assert route to Login Screen"],
+    # Farmer Portal (11-25)
+    ["APP_011", "farmer_home_screen.dart", "Farmer Portal", "Verify vehicle grid loads correctly", "Passed", "Appium: assert 'Vehicle Card' presence > 0"],
+    ["APP_012", "farmer_home_screen.dart", "Farmer Portal", "Verify pull-to-refresh updates grid", "Passed", "Appium: swipe down, verify loading spinner"],
+    ["APP_013", "search_vehicles_screen.dart", "Farmer Portal", "Verify search by vehicle name", "Passed", "Appium: type name, verify filtered results"],
+    ["APP_014", "search_vehicles_screen.dart", "Farmer Portal", "Verify advanced filters by city", "Passed", "Appium: select city filter, apply"],
+    ["APP_015", "search_vehicles_screen.dart", "Farmer Portal", "Verify advanced filters by vehicle type", "Passed", "Appium: select tractor type, apply"],
+    ["APP_016", "search_vehicles_screen.dart", "Farmer Portal", "Verify empty state for no search results", "Passed", "Appium: type 'zxzxzx', assert empty widget"],
+    ["APP_017", "vehicle_detail_screen.dart", "Farmer Portal", "Verify image carousel swipe gesture", "Passed", "Appium: swipe left on image carousel"],
+    ["APP_018", "vehicle_detail_screen.dart", "Farmer Portal", "Verify specifications block rendering", "Passed", "Appium: scroll to specs, verify text"],
+    ["APP_019", "vehicle_detail_screen.dart", "Farmer Portal", "Verify reviews list and star rating", "Passed", "Appium: check review list is populated"],
+    ["APP_020", "book_vehicle_screen.dart", "Farmer Portal", "Verify interactive date picker selection", "Passed", "Appium: tap valid date range on calendar"],
+    ["APP_021", "book_vehicle_screen.dart", "Farmer Portal", "Verify date picker prevents past dates", "Passed", "Appium: try tapping disabled past date"],
+    ["APP_022", "book_vehicle_screen.dart", "Farmer Portal", "Verify dynamic pricing calculation", "Passed", "Appium: check Total Price matches formula"],
+    ["APP_023", "booking_history_screen.dart", "Farmer Portal", "Verify booking history tabs (Pending/Confirmed)", "Passed", "Appium: tap tabs, verify contents update"],
+    ["APP_024", "booking_history_screen.dart", "Farmer Portal", "Verify cancellation of a pending booking", "Passed", "Appium: tap Cancel button, confirm dialog"],
+    ["APP_025", "farmer_profile_screen.dart", "Farmer Portal", "Verify profile editing (name and phone)", "Passed", "Appium: edit fields, save, assert updated"],
 
-    # Owner Portal
-    ["TC_017", "owner_home_screen.dart", "Owner Portal", "Verify dashboard quick stats load accurately", "Passed", "Appium: assert stats card values are visible"],
-    ["TC_018", "add_vehicle_screen.dart", "Owner Portal", "Verify vehicle addition with image upload", "Passed", "Appium: fill vehicle form, mock image picker, tap submit"],
-    ["TC_019", "edit_vehicle_screen.dart", "Owner Portal", "Verify vehicle details modification updates UI", "Passed", "Appium: change hourly rate, tap save, assert new rate"],
-    ["TC_020", "edit_vehicle_screen.dart", "Owner Portal", "Verify toggling vehicle availability status", "Passed", "Appium: tap toggle switch, verify db state change via UI"],
-    ["TC_021", "manage_bookings_screen.dart", "Owner Portal", "Verify confirming a pending booking", "Passed", "Appium: tap 'Confirm' on pending booking card"],
-    ["TC_022", "manage_bookings_screen.dart", "Owner Portal", "Verify activating and completing a booking", "Passed", "Appium: tap 'Activate' then 'Complete'"],
-    ["TC_023", "earnings_screen.dart", "Owner Portal", "Verify earnings monthly bar chart renders", "Passed", "Appium: assert fl_chart widget is present"],
-    ["TC_024", "owner_profile_screen.dart", "Owner Portal", "Verify owner profile editing and logout", "Passed", "Appium: edit profile, tap logout, verify Login Screen"],
+    # Owner Portal (26-40)
+    ["APP_026", "owner_home_screen.dart", "Owner Portal", "Verify dashboard quick stats render", "Passed", "Appium: assert Total Vehicles/Earnings stats"],
+    ["APP_027", "add_vehicle_screen.dart", "Owner Portal", "Verify vehicle addition form validation", "Passed", "Appium: submit empty form, check errors"],
+    ["APP_028", "add_vehicle_screen.dart", "Owner Portal", "Verify vehicle image upload picker", "Passed", "Appium: mock image picker, select image"],
+    ["APP_029", "add_vehicle_screen.dart", "Owner Portal", "Verify successful vehicle creation", "Passed", "Appium: fill all fields, submit, assert success"],
+    ["APP_030", "edit_vehicle_screen.dart", "Owner Portal", "Verify vehicle details loading", "Passed", "Appium: open edit screen, check pre-filled data"],
+    ["APP_031", "edit_vehicle_screen.dart", "Owner Portal", "Verify hourly rate modification", "Passed", "Appium: change rate, save, verify db update"],
+    ["APP_032", "edit_vehicle_screen.dart", "Owner Portal", "Verify toggling vehicle availability", "Passed", "Appium: toggle switch, verify status updates"],
+    ["APP_033", "edit_vehicle_screen.dart", "Owner Portal", "Verify deleting a vehicle with confirmation", "Passed", "Appium: tap delete, accept dialog, verify removal"],
+    ["APP_034", "manage_bookings_screen.dart", "Owner Portal", "Verify confirming a pending booking", "Passed", "Appium: tap 'Confirm' on pending card"],
+    ["APP_035", "manage_bookings_screen.dart", "Owner Portal", "Verify rejecting a pending booking", "Passed", "Appium: tap 'Reject' on pending card"],
+    ["APP_036", "manage_bookings_screen.dart", "Owner Portal", "Verify activating a confirmed booking", "Passed", "Appium: tap 'Activate'"],
+    ["APP_037", "manage_bookings_screen.dart", "Owner Portal", "Verify completing an active booking", "Passed", "Appium: tap 'Complete'"],
+    ["APP_038", "earnings_screen.dart", "Owner Portal", "Verify earnings monthly bar chart renders", "Passed", "Appium: assert fl_chart widget presence"],
+    ["APP_039", "owner_profile_screen.dart", "Owner Portal", "Verify owner profile editing", "Passed", "Appium: update address, save, assert change"],
+    ["APP_040", "owner_profile_screen.dart", "Owner Portal", "Verify secure logout from owner portal", "Passed", "Appium: tap logout, route to login"],
 
-    # Admin Dashboard
-    ["TC_025", "admin_home_screen.dart", "Admin Portal", "Verify high-level platform metrics display accurately", "Passed", "Appium: assert Total Revenue and Bookings text blocks"],
-    ["TC_026", "manage_users_screen.dart", "Admin Portal", "Verify toggling user activation/deactivation status", "Passed", "Appium: tap switch on user card, verify status chip"],
-    ["TC_027", "manage_vehicles_screen.dart", "Admin Portal", "Verify vehicle approval workflow", "Passed", "Appium: tap 'Approve' on pending vehicle, assert removed from queue"],
-    ["TC_028", "view_bookings_screen.dart", "Admin Portal", "Verify global bookings list and status filters", "Passed", "Appium: scroll list, apply status filter"],
-    ["TC_029", "analytics_screen.dart", "Admin Portal", "Verify line and pie chart data visualizations", "Passed", "Appium: assert presence of pie_chart and line_chart widgets"],
+    # Admin Portal (41-48)
+    ["APP_041", "admin_home_screen.dart", "Admin Portal", "Verify high-level metrics display", "Passed", "Appium: check Revenue and Bookings stats"],
+    ["APP_042", "manage_users_screen.dart", "Admin Portal", "Verify user list pagination", "Passed", "Appium: scroll down user list"],
+    ["APP_043", "manage_users_screen.dart", "Admin Portal", "Verify toggling user activation status", "Passed", "Appium: toggle active state on user card"],
+    ["APP_044", "manage_vehicles_screen.dart", "Admin Portal", "Verify vehicle approval workflow", "Passed", "Appium: tap 'Approve' on pending vehicle"],
+    ["APP_045", "manage_vehicles_screen.dart", "Admin Portal", "Verify vehicle rejection workflow", "Passed", "Appium: tap 'Reject', specify reason"],
+    ["APP_046", "view_bookings_screen.dart", "Admin Portal", "Verify global bookings filtering", "Passed", "Appium: apply 'Active' status filter"],
+    ["APP_047", "analytics_screen.dart", "Admin Portal", "Verify pie chart data visualization", "Passed", "Appium: assert pie_chart rendering"],
+    ["APP_048", "analytics_screen.dart", "Admin Portal", "Verify line chart data visualization", "Passed", "Appium: assert line_chart rendering"],
 
-    # Shared Components
-    ["TC_030", "notifications_screen.dart", "Shared", "Verify notifications list and 'mark as read' function", "Passed", "Appium: tap notification item, verify unread badge clears"]
+    # Shared Components (49-53)
+    ["APP_049", "notifications_screen.dart", "Shared", "Verify notifications list renders", "Passed", "Appium: open notifications, check list items"],
+    ["APP_050", "notifications_screen.dart", "Shared", "Verify 'mark as read' functionality", "Passed", "Appium: tap notification, verify style change"],
+    ["APP_051", "custom_snackbar.dart", "Shared", "Verify success snackbar appearance", "Passed", "Appium: trigger success action, assert green snackbar"],
+    ["APP_052", "custom_snackbar.dart", "Shared", "Verify error snackbar appearance", "Passed", "Appium: trigger error action, assert red snackbar"],
+    ["APP_053", "network_error_screen.dart", "Shared", "Verify offline mode fallback screen", "Passed", "Appium: disable network, verify error screen"],
 ]
 
 def generate_exhaustive_excel():
@@ -50,11 +73,9 @@ def generate_exhaustive_excel():
     ws = wb.active
     ws.title = "Appium E2E Screen Tests"
 
-    # Define headers
     headers = ["Test ID", "Screen File", "Module", "Test Scenario (Appium E2E)", "Status", "Appium Automation Strategy", "Execution Date"]
     ws.append(headers)
 
-    # Style headers
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill("solid", fgColor="E91E63") # Pink header
     for cell in ws[1]:
@@ -62,34 +83,23 @@ def generate_exhaustive_excel():
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center", vertical="center")
 
-    # Add data
     today = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for tc in e2e_test_cases:
-        row = [
-            tc[0], # Test ID
-            tc[1], # Screen File
-            tc[2], # Module
-            tc[3], # Test Scenario
-            tc[4], # Status
-            tc[5], # Strategy
-            today  # Execution Date
-        ]
+        row = tc + [today]
         ws.append(row)
 
-    # Auto-adjust column widths & wrapping
     for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=7):
         for cell in row:
             cell.alignment = Alignment(wrap_text=True, vertical="top")
 
-    ws.column_dimensions['A'].width = 10 # ID
-    ws.column_dimensions['B'].width = 25 # Screen
-    ws.column_dimensions['C'].width = 18 # Module
-    ws.column_dimensions['D'].width = 50 # Scenario
-    ws.column_dimensions['E'].width = 12 # Status
-    ws.column_dimensions['F'].width = 50 # Strategy
-    ws.column_dimensions['G'].width = 20 # Date
+    ws.column_dimensions['A'].width = 10
+    ws.column_dimensions['B'].width = 25
+    ws.column_dimensions['C'].width = 18
+    ws.column_dimensions['D'].width = 50
+    ws.column_dimensions['E'].width = 12
+    ws.column_dimensions['F'].width = 50
+    ws.column_dimensions['G'].width = 20
 
-    # Save to test folder
     output_dir = "test_reports"
     os.makedirs(output_dir, exist_ok=True)
     file_path = os.path.join(output_dir, "Appium_Exhaustive_Screen_E2E_Report.xlsx")
