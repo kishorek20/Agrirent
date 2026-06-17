@@ -90,7 +90,7 @@ def generate_exhaustive_excel():
     ws.column_dimensions['G'].width = 20 # Date
 
     # Save to test folder
-    output_dir = "e:/PDD/Project_Agrirent/agrirent_final/test"
+    output_dir = "test_reports"
     os.makedirs(output_dir, exist_ok=True)
     file_path = os.path.join(output_dir, "Appium_Exhaustive_Screen_E2E_Report.xlsx")
     
