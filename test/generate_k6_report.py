@@ -1,283 +1,315 @@
-import json
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.chart import BarChart, Reference
+from openpyxl.utils import get_column_letter
+import json
 import datetime
 import os
 import sys
 
-def parse_k6_summary(json_path):
-    """Parse k6 JSON summary output into structured data."""
+def parse_k6_json(json_path):
+    """Parse the K6 JSON summary output file."""
     with open(json_path, 'r') as f:
         data = json.load(f)
 
     metrics = data.get('metrics', {})
-    results = []
+    root_group = data.get('root_group', {})
 
-    # Map of friendly names to k6 metric keys
-    metric_map = {
-        'HTTP Request Duration': 'http_req_duration',
-        'HTTP Request Blocked': 'http_req_blocked',
-        'HTTP Request Connecting': 'http_req_connecting',
-        'HTTP Request Sending': 'http_req_sending',
-        'HTTP Request Waiting (TTFB)': 'http_req_waiting',
-        'HTTP Request Receiving': 'http_req_receiving',
-        'HTTP Request Failed': 'http_req_failed',
-        'Health Check Latency': 'health_check_latency',
-        'Vehicles Latency': 'vehicles_latency',
-        'Users Latency': 'users_latency',
-        'Bookings Latency': 'bookings_latency',
-        'Payments Latency': 'payments_latency',
-        'Notifications Latency': 'notifications_latency',
-        'Reviews Latency': 'reviews_latency',
-        'Iterations': 'iterations',
-        'Virtual Users': 'vus',
-        'Data Received': 'data_received',
-        'Data Sent': 'data_sent',
+    # ── Overall Summary ──────────────────────────────────────────────────
+    http_reqs = metrics.get('http_reqs', {})
+    http_duration = metrics.get('http_req_duration', {})
+    iterations = metrics.get('iterations', {})
+    vus = metrics.get('vus', {})
+    data_received = metrics.get('data_received', {})
+    data_sent = metrics.get('data_sent', {})
+    checks = metrics.get('checks', {})
+
+    duration_vals = http_duration.get('values', {})
+    
+    summary = {
+        'Total Requests': int(http_reqs.get('values', {}).get('count', 0)),
+        'Requests/sec (RPS)': round(http_reqs.get('values', {}).get('rate', 0), 2),
+        'Avg Response Time (ms)': round(duration_vals.get('avg', 0), 2),
+        'Min Response Time (ms)': round(duration_vals.get('min', 0), 2),
+        'Max Response Time (ms)': round(duration_vals.get('max', 0), 2),
+        'Median Response Time (ms)': round(duration_vals.get('med', 0), 2),
+        'p90 Response Time (ms)': round(duration_vals.get('p(90)', 0), 2),
+        'p95 Response Time (ms)': round(duration_vals.get('p(95)', 0), 2),
+        'Total Iterations': int(iterations.get('values', {}).get('count', 0)),
+        'Virtual Users': int(vus.get('values', {}).get('max', 0)),
+        'Data Received (MB)': round(data_received.get('values', {}).get('count', 0) / (1024 * 1024), 2),
+        'Data Sent (MB)': round(data_sent.get('values', {}).get('count', 0) / (1024 * 1024), 2),
+        'Check Pass Rate (%)': round(checks.get('values', {}).get('rate', 0) * 100, 2) if checks else 'N/A',
     }
 
-    for friendly_name, key in metric_map.items():
-        m = metrics.get(key, {})
-        if not m:
-            continue
+    # ── Per-Endpoint Breakdown ───────────────────────────────────────────
+    endpoint_metrics = {}
+    endpoint_prefixes = {
+        'health_req_duration': 'Health Check',
+        'vehicles_req_duration': 'GET /vehicles',
+        'users_req_duration': 'GET /users',
+        'bookings_req_duration': 'GET /bookings',
+        'notifications_req_duration': 'GET /notifications',
+        'payments_req_duration': 'GET /payments',
+        'reviews_req_duration': 'GET /reviews',
+    }
 
-        metric_type = m.get('type', '')
-        values = m.get('values', {})
+    for metric_key, display_name in endpoint_prefixes.items():
+        m = metrics.get(metric_key, {})
+        vals = m.get('values', {})
+        if vals:
+            endpoint_metrics[display_name] = {
+                'Avg (ms)': round(vals.get('avg', 0), 2),
+                'Min (ms)': round(vals.get('min', 0), 2),
+                'Max (ms)': round(vals.get('max', 0), 2),
+                'Median (ms)': round(vals.get('med', 0), 2),
+                'p90 (ms)': round(vals.get('p(90)', 0), 2),
+                'p95 (ms)': round(vals.get('p(95)', 0), 2),
+                'Count': int(m.get('values', {}).get('count', 0)) if 'count' in vals else 'N/A',
+            }
 
-        if metric_type == 'trend':
-            results.append({
-                'metric': friendly_name,
-                'type': 'Trend (ms)',
-                'avg': round(values.get('avg', 0), 2),
-                'min': round(values.get('min', 0), 2),
-                'max': round(values.get('max', 0), 2),
-                'p90': round(values.get('p(90)', 0), 2),
-                'p95': round(values.get('p(95)', 0), 2),
-                'med': round(values.get('med', 0), 2),
-                'count': values.get('count', ''),
-            })
-        elif metric_type == 'counter':
-            results.append({
-                'metric': friendly_name,
-                'type': 'Counter',
-                'avg': '',
-                'min': '',
-                'max': '',
-                'p90': '',
-                'p95': '',
-                'med': '',
-                'count': values.get('count', values.get('value', 0)),
-            })
-        elif metric_type == 'gauge':
-            results.append({
-                'metric': friendly_name,
-                'type': 'Gauge',
-                'avg': values.get('value', 0),
-                'min': values.get('min', 0),
-                'max': values.get('max', 0),
-                'p90': '',
-                'p95': '',
-                'med': '',
-                'count': '',
-            })
-        elif metric_type == 'rate':
-            results.append({
-                'metric': friendly_name,
-                'type': 'Rate',
-                'avg': round(values.get('rate', 0) * 100, 2),
-                'min': '',
-                'max': '',
-                'p90': '',
-                'p95': '',
-                'med': '',
-                'count': values.get('passes', 0),
-            })
+    return summary, endpoint_metrics
 
-    # Extract check results
-    checks = metrics.get('checks', {})
-    if checks:
-        vals = checks.get('values', {})
-        results.append({
-            'metric': 'Checks Pass Rate',
-            'type': 'Rate (%)',
-            'avg': round(vals.get('rate', 0) * 100, 2),
-            'min': '',
-            'max': '',
-            'p90': '',
-            'p95': '',
-            'med': '',
-            'count': vals.get('passes', 0),
-        })
 
-    # Extract error rate
-    errors = metrics.get('errors', {})
-    if errors:
-        vals = errors.get('values', {})
-        results.append({
-            'metric': 'Custom Error Rate',
-            'type': 'Rate (%)',
-            'avg': round(vals.get('rate', 0) * 100, 2),
-            'min': '',
-            'max': '',
-            'p90': '',
-            'p95': '',
-            'med': '',
-            'count': vals.get('passes', 0),
-        })
-
-    # Compute RPS
-    http_reqs = metrics.get('http_reqs', {})
-    if http_reqs:
-        vals = http_reqs.get('values', {})
-        results.append({
-            'metric': 'Requests Per Second (RPS)',
-            'type': 'Rate',
-            'avg': round(vals.get('rate', 0), 2),
-            'min': '',
-            'max': '',
-            'p90': '',
-            'p95': '',
-            'med': '',
-            'count': vals.get('count', 0),
-        })
-
-    return results
-
-def generate_excel(results, output_path):
-    """Generate a styled Excel report from parsed k6 results."""
+def generate_excel(summary, endpoint_metrics, output_path):
+    """Generate a styled Excel report from K6 results."""
     wb = openpyxl.Workbook()
 
-    # ── Sheet 1: Summary ──────────────────────────────────────────────────────
-    ws = wb.active
-    ws.title = "Load Test Summary"
+    # ── Colors & Styles ──────────────────────────────────────────────────
+    dark_bg = PatternFill("solid", fgColor="1B1F2A")
+    header_fill = PatternFill("solid", fgColor="6C63FF")  # Purple accent
+    metric_fill = PatternFill("solid", fgColor="232836")
+    green_fill = PatternFill("solid", fgColor="00C853")
+    amber_fill = PatternFill("solid", fgColor="FFB300")
+    red_fill = PatternFill("solid", fgColor="FF1744")
 
-    # Title row
-    ws.merge_cells('A1:I1')
-    title_cell = ws['A1']
-    title_cell.value = "AgriRent — k6 Baseline Load Test Report"
-    title_cell.font = Font(bold=True, size=16, color="FFFFFF")
-    title_cell.fill = PatternFill("solid", fgColor="1565C0")
-    title_cell.alignment = Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[1].height = 35
+    white_font = Font(color="FFFFFF", size=11)
+    bold_white = Font(color="FFFFFF", size=11, bold=True)
+    header_font = Font(color="FFFFFF", size=12, bold=True)
+    title_font = Font(color="FFFFFF", size=16, bold=True)
+    subtitle_font = Font(color="B0BEC5", size=10, italic=True)
+    value_font = Font(color="E0E0E0", size=11)
+    big_value_font = Font(color="00E676", size=14, bold=True)
 
-    # Subtitle
-    ws.merge_cells('A2:I2')
-    sub_cell = ws['A2']
-    sub_cell.value = f"Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  |  100 VUs  |  1 Minute Duration"
-    sub_cell.font = Font(size=11, color="FFFFFF", italic=True)
-    sub_cell.fill = PatternFill("solid", fgColor="1E88E5")
-    sub_cell.alignment = Alignment(horizontal="center")
-    ws.row_dimensions[2].height = 25
-
-    # Headers
-    headers = ["Metric", "Type", "Avg", "Min", "Max", "p(90)", "p(95)", "Median", "Count"]
-    for col_idx, h in enumerate(headers, 1):
-        cell = ws.cell(row=4, column=col_idx, value=h)
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor="0D47A1")
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-
-    # Data rows
     thin_border = Border(
-        left=Side(style='thin', color='BBBBBB'),
-        right=Side(style='thin', color='BBBBBB'),
-        top=Side(style='thin', color='BBBBBB'),
-        bottom=Side(style='thin', color='BBBBBB'),
+        left=Side(style='thin', color='37474F'),
+        right=Side(style='thin', color='37474F'),
+        top=Side(style='thin', color='37474F'),
+        bottom=Side(style='thin', color='37474F'),
     )
 
-    for row_idx, r in enumerate(results, 5):
-        values = [r['metric'], r['type'], r['avg'], r['min'], r['max'], r['p90'], r['p95'], r['med'], r['count']]
-        fill_color = "E3F2FD" if row_idx % 2 == 0 else "FFFFFF"
-        for col_idx, val in enumerate(values, 1):
-            cell = ws.cell(row=row_idx, column=col_idx, value=val)
-            cell.alignment = Alignment(wrap_text=True, vertical="top")
-            cell.fill = PatternFill("solid", fgColor=fill_color)
-            cell.border = thin_border
+    center = Alignment(horizontal="center", vertical="center")
+    left = Alignment(horizontal="left", vertical="center")
+    wrap = Alignment(wrap_text=True, vertical="center")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Sheet 1: Overview Dashboard
+    # ══════════════════════════════════════════════════════════════════════
+    ws1 = wb.active
+    ws1.title = "Load Test Overview"
+    ws1.sheet_properties.tabColor = "6C63FF"
+
+    # Set dark background for all cells
+    for row in range(1, 30):
+        for col in range(1, 8):
+            cell = ws1.cell(row=row, column=col)
+            cell.fill = dark_bg
+
+    # Title
+    ws1.merge_cells('A1:G1')
+    title_cell = ws1['A1']
+    title_cell.value = "🚀 AgriRent — K6 Baseline Load Test Report"
+    title_cell.font = title_font
+    title_cell.fill = PatternFill("solid", fgColor="6C63FF")
+    title_cell.alignment = center
+
+    # Subtitle
+    ws1.merge_cells('A2:G2')
+    sub_cell = ws1['A2']
+    sub_cell.value = f"Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | 100 VUs | 1 Minute Duration | Supabase REST API"
+    sub_cell.font = subtitle_font
+    sub_cell.fill = dark_bg
+    sub_cell.alignment = center
+
+    # Summary KPIs
+    row = 4
+    ws1.merge_cells('A4:G4')
+    sec_header = ws1['A4']
+    sec_header.value = "📊 Key Performance Indicators"
+    sec_header.font = Font(color="FFFFFF", size=13, bold=True)
+    sec_header.fill = PatternFill("solid", fgColor="37474F")
+    sec_header.alignment = center
+
+    row = 5
+    for key, value in summary.items():
+        ws1.cell(row=row, column=2, value=key).font = bold_white
+        ws1.cell(row=row, column=2).fill = metric_fill
+        ws1.cell(row=row, column=2).alignment = left
+        ws1.cell(row=row, column=2).border = thin_border
+
+        val_cell = ws1.cell(row=row, column=4, value=value)
+        val_cell.font = big_value_font
+        val_cell.fill = metric_fill
+        val_cell.alignment = center
+        val_cell.border = thin_border
+
+        # Status indicator
+        status_cell = ws1.cell(row=row, column=5)
+        if 'Response Time' in key and isinstance(value, (int, float)):
+            if value < 500:
+                status_cell.value = "✅ FAST"
+                status_cell.fill = green_fill
+            elif value < 1500:
+                status_cell.value = "⚠️ OK"
+                status_cell.fill = amber_fill
+            else:
+                status_cell.value = "🔴 SLOW"
+                status_cell.fill = red_fill
+            status_cell.font = Font(color="FFFFFF", bold=True)
+            status_cell.alignment = center
+        row += 1
 
     # Column widths
-    widths = [35, 12, 12, 12, 12, 12, 12, 12, 12]
-    for i, w in enumerate(widths, 1):
-        ws.column_dimensions[chr(64 + i)].width = w
+    ws1.column_dimensions['A'].width = 3
+    ws1.column_dimensions['B'].width = 30
+    ws1.column_dimensions['C'].width = 3
+    ws1.column_dimensions['D'].width = 20
+    ws1.column_dimensions['E'].width = 15
+    ws1.column_dimensions['F'].width = 15
+    ws1.column_dimensions['G'].width = 3
 
-    # ── Sheet 2: Endpoint Latency Chart ───────────────────────────────────────
-    ws2 = wb.create_sheet("Latency Chart")
+    # ══════════════════════════════════════════════════════════════════════
+    # Sheet 2: Per-Endpoint Breakdown
+    # ══════════════════════════════════════════════════════════════════════
+    ws2 = wb.create_sheet("Endpoint Breakdown")
+    ws2.sheet_properties.tabColor = "00BCD4"
 
-    latency_metrics = [r for r in results if 'Latency' in r['metric']]
-    ws2.append(["Endpoint", "Avg (ms)", "p95 (ms)", "Max (ms)"])
-    for cell in ws2[1]:
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor="0D47A1")
+    # Dark background
+    for r in range(1, len(endpoint_metrics) + 10):
+        for c in range(1, 10):
+            ws2.cell(row=r, column=c).fill = dark_bg
 
-    for r in latency_metrics:
-        ws2.append([r['metric'].replace(' Latency', ''), r['avg'], r['p95'], r['max']])
+    # Title
+    ws2.merge_cells('A1:H1')
+    t2 = ws2['A1']
+    t2.value = "📡 Per-Endpoint Response Time Breakdown"
+    t2.font = title_font
+    t2.fill = PatternFill("solid", fgColor="00BCD4")
+    t2.alignment = center
 
-    if latency_metrics:
+    # Headers
+    ep_headers = ["Endpoint", "Avg (ms)", "Min (ms)", "Max (ms)", "Median (ms)", "p90 (ms)", "p95 (ms)", "Count"]
+    for col_idx, h in enumerate(ep_headers, 1):
+        cell = ws2.cell(row=3, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center
+        cell.border = thin_border
+
+    # Data rows
+    r = 4
+    for ep_name, vals in endpoint_metrics.items():
+        ws2.cell(row=r, column=1, value=ep_name).font = bold_white
+        ws2.cell(row=r, column=1).fill = metric_fill
+        ws2.cell(row=r, column=1).alignment = left
+        ws2.cell(row=r, column=1).border = thin_border
+
+        col = 2
+        for metric_key in ['Avg (ms)', 'Min (ms)', 'Max (ms)', 'Median (ms)', 'p90 (ms)', 'p95 (ms)', 'Count']:
+            v = vals.get(metric_key, 'N/A')
+            cell = ws2.cell(row=r, column=col, value=v)
+            cell.font = value_font
+            cell.fill = metric_fill
+            cell.alignment = center
+            cell.border = thin_border
+
+            # Color code avg response time
+            if metric_key == 'Avg (ms)' and isinstance(v, (int, float)):
+                if v < 300:
+                    cell.font = Font(color="00E676", bold=True)
+                elif v < 1000:
+                    cell.font = Font(color="FFB300", bold=True)
+                else:
+                    cell.font = Font(color="FF1744", bold=True)
+            col += 1
+        r += 1
+
+    # Column widths
+    ws2.column_dimensions['A'].width = 25
+    for c in range(2, 9):
+        ws2.column_dimensions[get_column_letter(c)].width = 15
+
+    # ── Add a bar chart for avg response times ───────────────────────────
+    if endpoint_metrics:
         chart = BarChart()
         chart.type = "col"
-        chart.title = "Endpoint Latency (ms)"
-        chart.y_axis.title = "Milliseconds"
+        chart.title = "Average Response Time by Endpoint (ms)"
+        chart.y_axis.title = "ms"
         chart.x_axis.title = "Endpoint"
         chart.style = 10
-        chart.width = 28
-        chart.height = 16
 
-        cats = Reference(ws2, min_col=1, min_row=2, max_row=1 + len(latency_metrics))
-        avg_data = Reference(ws2, min_col=2, min_row=1, max_row=1 + len(latency_metrics))
-        p95_data = Reference(ws2, min_col=3, min_row=1, max_row=1 + len(latency_metrics))
-        max_data = Reference(ws2, min_col=4, min_row=1, max_row=1 + len(latency_metrics))
+        data_ref = Reference(ws2, min_col=2, min_row=3, max_row=3 + len(endpoint_metrics))
+        cats_ref = Reference(ws2, min_col=1, min_row=4, max_row=3 + len(endpoint_metrics))
+        chart.add_data(data_ref, titles_from_data=True)
+        chart.set_categories(cats_ref)
+        chart.shape = 4
+        chart.width = 22
+        chart.height = 12
+        ws2.add_chart(chart, f"A{r + 2}")
 
-        chart.add_data(avg_data, titles_from_data=True)
-        chart.add_data(p95_data, titles_from_data=True)
-        chart.add_data(max_data, titles_from_data=True)
-        chart.set_categories(cats)
-        ws2.add_chart(chart, "A" + str(3 + len(latency_metrics)))
+    # ══════════════════════════════════════════════════════════════════════
+    # Sheet 3: Test Configuration
+    # ══════════════════════════════════════════════════════════════════════
+    ws3 = wb.create_sheet("Test Configuration")
+    ws3.sheet_properties.tabColor = "FF9800"
 
-    # ── Sheet 3: Pass/Fail Verdict ────────────────────────────────────────────
-    ws3 = wb.create_sheet("Verdict")
-    ws3.merge_cells('A1:C1')
-    ws3['A1'].value = "Threshold Verdicts"
-    ws3['A1'].font = Font(bold=True, size=14, color="FFFFFF")
-    ws3['A1'].fill = PatternFill("solid", fgColor="2E7D32")
-    ws3['A1'].alignment = Alignment(horizontal="center")
+    for r in range(1, 20):
+        for c in range(1, 5):
+            ws3.cell(row=r, column=c).fill = dark_bg
 
-    ws3.append(["Threshold", "Condition", "Result"])
-    for cell in ws3[2]:
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor="388E3C")
+    ws3.merge_cells('A1:D1')
+    t3 = ws3['A1']
+    t3.value = "⚙️ Load Test Configuration"
+    t3.font = title_font
+    t3.fill = PatternFill("solid", fgColor="FF9800")
+    t3.alignment = center
 
-    # Find relevant metrics for verdicts
-    http_dur = next((r for r in results if r['metric'] == 'HTTP Request Duration'), None)
-    error_r = next((r for r in results if r['metric'] == 'Custom Error Rate'), None)
-    rps = next((r for r in results if r['metric'] == 'Requests Per Second (RPS)'), None)
+    config_items = [
+        ("Test Tool", "Grafana K6"),
+        ("Test Type", "Baseline / Load Test"),
+        ("Virtual Users (VUs)", "100"),
+        ("Duration", "1 minute"),
+        ("Target System", "AgriRent Supabase REST API"),
+        ("Base URL", "https://atafeyidjdzedbktzivx.supabase.co"),
+        ("Endpoints Tested", "7 (Health, Vehicles, Users, Bookings, Notifications, Payments, Reviews)"),
+        ("Think Time", "300ms between iterations"),
+        ("Threshold: p95", "< 2000ms"),
+        ("Threshold: Error Rate", "< 10%"),
+        ("Execution Date", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+    ]
 
-    verdicts = []
-    if http_dur:
-        p95_val = http_dur.get('p95', 0)
-        passed = p95_val < 2000 if isinstance(p95_val, (int, float)) else True
-        verdicts.append(["p(95) Response Time < 2000ms", f"Actual: {p95_val}ms", "✅ PASS" if passed else "❌ FAIL"])
-    if error_r:
-        err_val = error_r.get('avg', 0)
-        passed = err_val < 10 if isinstance(err_val, (int, float)) else True
-        verdicts.append(["Error Rate < 10%", f"Actual: {err_val}%", "✅ PASS" if passed else "❌ FAIL"])
-    if rps:
-        verdicts.append(["Requests Per Second", f"Actual: {rps.get('avg', 'N/A')} req/s", "ℹ️ INFO"])
+    row = 3
+    for key, value in config_items:
+        ws3.cell(row=row, column=1, value=key).font = bold_white
+        ws3.cell(row=row, column=1).fill = metric_fill
+        ws3.cell(row=row, column=1).border = thin_border
+        ws3.cell(row=row, column=2, value=value).font = value_font
+        ws3.cell(row=row, column=2).fill = metric_fill
+        ws3.cell(row=row, column=2).border = thin_border
+        row += 1
 
-    for v in verdicts:
-        ws3.append(v)
+    ws3.column_dimensions['A'].width = 25
+    ws3.column_dimensions['B'].width = 60
 
-    ws3.column_dimensions['A'].width = 35
-    ws3.column_dimensions['B'].width = 25
-    ws3.column_dimensions['C'].width = 15
-
-    # Save
+    # ── Save ─────────────────────────────────────────────────────────────
+    os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
     wb.save(output_path)
-    print(f"Load test Excel report generated at: {output_path}")
+    print(f"[OK] K6 Load Test Excel report generated at: {output_path}")
+
 
 if __name__ == "__main__":
-    json_path = sys.argv[1] if len(sys.argv) > 1 else "test_reports/k6_summary.json"
+    json_path = sys.argv[1] if len(sys.argv) > 1 else "test_reports/k6_results.json"
     output_path = sys.argv[2] if len(sys.argv) > 2 else "test_reports/K6_Load_Test_Report.xlsx"
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-    results = parse_k6_summary(json_path)
-    generate_excel(results, output_path)
+    
+    summary, endpoint_metrics = parse_k6_json(json_path)
+    generate_excel(summary, endpoint_metrics, output_path)
