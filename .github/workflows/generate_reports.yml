@@ -23,6 +23,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install openpyxl pandas
 
+      # ── Clean stale report files ─────────────────────────────────────────
+      - name: Clean previous report artifacts
+        run: |
+          mkdir -p test_reports
+          rm -f test_reports/*.xlsx
+          rm -f test_reports/*.txt
+          rm -f test_reports/*.json
+
       # ── K6 Load Testing ──────────────────────────────────────────────────
       - name: Install K6
         run: |
@@ -36,7 +44,6 @@ jobs:
 
       - name: Run K6 Load Test
         run: |
-          mkdir -p test_reports
           k6 run test/k6_load_test.js \
             --summary-export=test_reports/k6_results.json \
             --out json=test_reports/k6_raw_output.json \
@@ -50,18 +57,24 @@ jobs:
             test_reports/K6_Load_Test_Report.xlsx
 
       # ── Other Test Reports ───────────────────────────────────────────────
-      - name: Generate Other Test Reports
-        run: |
-          python test/generate_exhaustive_e2e_excel.py
-          python test/generate_selenium_report.py
-          python test/generate_vulnerability_report.py
+      - name: Generate Appium E2E Report
+        run: python test/generate_exhaustive_e2e_excel.py
 
-      # ── Upload All Reports ──────────────────────────────────────────────
-      - name: Upload Excel Reports
+      - name: Generate Selenium Web E2E Report
+        run: python test/generate_selenium_report.py
+
+      - name: Generate Vulnerability Test Report
+        run: python test/generate_vulnerability_report.py
+
+      # ── Upload Exactly 5 Target Reports ─────────────────────────────────
+      - name: Upload Test Reports
         uses: actions/upload-artifact@v4
         with:
           name: agrirent-test-reports
           path: |
-            test_reports/*.xlsx
+            test_reports/Appium_Exhaustive_Screen_E2E_Report.xlsx
+            test_reports/Selenium_Web_E2E_Report.xlsx
+            test_reports/Vulnerability_Test_Report.xlsx
+            test_reports/K6_Load_Test_Report.xlsx
             test_reports/k6_console_output.txt
           retention-days: 30
