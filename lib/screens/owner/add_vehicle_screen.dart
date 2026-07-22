@@ -8,6 +8,7 @@ import '../../utils/app_theme.dart';
 import '../../utils/constants.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/loading_button.dart';
+import '../../widgets/smart_price_widget.dart';
 
 class AddVehicleScreen extends StatefulWidget {
   const AddVehicleScreen({super.key});
@@ -335,6 +336,28 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                     ),
                   ),
                 ],
+              ),
+
+              const SizedBox(height: 16),
+
+              // ── Smart Price Suggestion ───────────────────────
+              SmartPriceWidget(
+                vehicleType: _selectedType,
+                state: _selectedState,
+                year: int.tryParse(_yearController.text.trim()),
+                features: _selectedFeatures,
+                onApply: (day, hour) {
+                  setState(() {
+                    _pricePerDayController.text = day.toStringAsFixed(0);
+                    _pricePerHourController.text = hour.toStringAsFixed(0);
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Smart prices applied! ✨ You can adjust if needed.'),
+                      backgroundColor: AppTheme.successGreen,
+                    ),
+                  );
+                },
               ),
 
               const SizedBox(height: 24),

@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../models/vehicle_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/search_ranking_service.dart';
 import '../../services/vehicle_service.dart';
 import '../../utils/app_theme.dart';
 import '../../utils/constants.dart';
+import '../../widgets/search_suggestion_overlay.dart';
 import '../../widgets/vehicle_card.dart';
 
 class FarmerHomeScreen extends StatefulWidget {
@@ -22,8 +24,12 @@ class _FarmerHomeScreenState extends State<FarmerHomeScreen> {
 
   List<VehicleModel> _vehicles = [];
   List<VehicleModel> _filteredVehicles = [];
+  List<SuggestionItem> _suggestions = [];
+
   bool _isLoading = true;
+  bool _showSuggestions = false;
   String? _selectedType;
+  String _selectedSort = 'recommended';
 
   @override
   void initState() {
@@ -34,8 +40,9 @@ class _FarmerHomeScreenState extends State<FarmerHomeScreen> {
   Future<void> _loadVehicles() async {
     setState(() => _isLoading = true);
     try {
-      _vehicles = await _vehicleService.getApprovedVehicles();
-      _filteredVehicles = _vehicles;
+      final rawVehicles = await _vehicleService.getApprovedVehicles();
+      _vehicles = rawVehicles;
+      _applyFiltersAndRanking();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -46,15 +53,49 @@ class _FarmerHomeScreenState extends State<FarmerHomeScreen> {
     if (mounted) setState(() => _isLoading = false);
   }
 
+  void _applyFiltersAndRanking() {
+    final query = _searchController.text.trim();
+    final user = context.read<AuthProvider>().currentUser;
+
+    var list = _vehicles;
+    if (_selectedType != null) {
+      list = list.where((v) => v.vehicleType == _selectedType).toList();
+    }
+
+    _filteredVehicles = SearchRankingService.rankVehicles(
+      list,
+      query: query,
+      userCity: user?.city,
+      userState: user?.state,
+      sortBy: _selectedSort,
+    );
+  }
+
+  void _onSearchChanged(String query) {
+    final suggestions =
+        SearchRankingService.getSearchSuggestions(_vehicles, query);
+    setState(() {
+      _suggestions = suggestions;
+      _showSuggestions = suggestions.isNotEmpty;
+      _applyFiltersAndRanking();
+    });
+  }
+
+  void _selectSuggestion(SuggestionItem item) {
+    _searchController.text = item.text;
+    setState(() {
+      _showSuggestions = false;
+      if (item.category == 'Category') {
+        _selectedType = item.text;
+      }
+      _applyFiltersAndRanking();
+    });
+  }
+
   void _filterByType(String? type) {
     setState(() {
       _selectedType = type;
-      if (type == null) {
-        _filteredVehicles = _vehicles;
-      } else {
-        _filteredVehicles =
-            _vehicles.where((v) => v.vehicleType == type).toList();
-      }
+      _applyFiltersAndRanking();
     });
   }
 
@@ -122,7 +163,8 @@ class _FarmerHomeScreenState extends State<FarmerHomeScreen> {
                                 ],
                               ),
                               CircleAvatar(
-                                backgroundColor: Colors.white.withValues(alpha: 0.2),
+                                backgroundColor:
+                                    Colors.white.withValues(alpha: 0.2),
                                 child: Text(
                                   firstName[0].toUpperCase(),
                                   style: const TextStyle(
@@ -156,34 +198,42 @@ class _FarmerHomeScreenState extends State<FarmerHomeScreen> {
                   ),
                   child: TextField(
                     controller: _searchController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: 'Search vehicles, locations...',
                       prefixIcon:
-                          Icon(Icons.search, color: AppTheme.primaryGreen),
+                          const Icon(Icons.search, color: AppTheme.primaryGreen),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 20),
+                              onPressed: () {
+                                _searchController.clear();
+                                _onSearchChanged('');
+                              },
+                            )
+                          : null,
                       border: InputBorder.none,
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
                     ),
-                    onChanged: (query) {
-                      if (query.isEmpty) {
-                        setState(() => _filteredVehicles = _vehicles);
-                      } else {
-                        final q = query.toLowerCase();
-                        setState(() {
-                          _filteredVehicles = _vehicles
-                              .where((v) =>
-                                  v.title.toLowerCase().contains(q) ||
-                                  (v.city?.toLowerCase().contains(q) ??
-                                      false) ||
-                                  v.vehicleType.toLowerCase().contains(q))
-                              .toList();
-                        });
+                    onChanged: _onSearchChanged,
+                    onTap: () {
+                      if (_suggestions.isNotEmpty) {
+                        setState(() => _showSuggestions = true);
                       }
                     },
                   ),
                 ),
               ),
             ),
+
+            // ── Suggestions Overlay ───────────────────────────
+            if (_showSuggestions)
+              SliverToBoxAdapter(
+                child: SearchSuggestionOverlay(
+                  suggestions: _suggestions,
+                  onSelected: _selectSuggestion,
+                ),
+              ),
 
             // ── Filter Chips ─────────────────────────────────
             SliverToBoxAdapter(
@@ -256,25 +306,56 @@ class _FarmerHomeScreenState extends State<FarmerHomeScreen> {
               ),
             ),
 
-            // ── Section Header ────────────────────────────────
+            // ── Section Header with Ranking Controls ─────────────
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _selectedType != null
-                          ? '$_selectedType Vehicles'
-                          : 'Available Vehicles',
-                      style: Theme.of(context).textTheme.titleLarge,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _selectedType != null
+                              ? '$_selectedType Vehicles'
+                              : 'Available Vehicles',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        Text(
+                          '${_filteredVehicles.length} found',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: AppTheme.primaryGreen),
+                        ),
+                      ],
                     ),
-                    Text(
-                      '${_filteredVehicles.length} found',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: AppTheme.primaryGreen),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.sort,
+                            size: 18, color: AppTheme.primaryGreen),
+                        const SizedBox(width: 6),
+                        const Text('Sort:',
+                            style: TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.w600)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                _sortChip('Recommended ✨', 'recommended'),
+                                _sortChip('Top Rated ⭐', 'rating'),
+                                _sortChip('Most Popular 🔥', 'bookings'),
+                                _sortChip('Price: Low-High', 'price_low'),
+                                _sortChip('Price: High-Low', 'price_high'),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -287,8 +368,8 @@ class _FarmerHomeScreenState extends State<FarmerHomeScreen> {
                 child: Center(
                   child: Padding(
                     padding: EdgeInsets.all(32),
-                    child:
-                        CircularProgressIndicator(color: AppTheme.primaryGreen),
+                    child: CircularProgressIndicator(
+                        color: AppTheme.primaryGreen),
                   ),
                 ),
               )
@@ -361,6 +442,37 @@ class _FarmerHomeScreenState extends State<FarmerHomeScreen> {
             color: isSelected ? AppTheme.primaryGreen : Colors.grey.shade300,
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _sortChip(String label, String value) {
+    final isSelected = _selectedSort == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: isSelected,
+        onSelected: (selected) {
+          if (selected) {
+            setState(() {
+              _selectedSort = value;
+              _applyFiltersAndRanking();
+            });
+          }
+        },
+        selectedColor: AppTheme.primaryGreen.withValues(alpha: 0.15),
+        backgroundColor: Colors.white,
+        side: BorderSide(
+          color: isSelected ? AppTheme.primaryGreen : Colors.grey.shade300,
+        ),
+        labelStyle: TextStyle(
+          color: isSelected ? AppTheme.primaryGreen : AppTheme.greyText,
+          fontSize: 12,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+        visualDensity: VisualDensity.compact,
       ),
     );
   }

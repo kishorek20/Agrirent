@@ -6,6 +6,7 @@ import '../../models/booking_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/booking_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/review_service.dart';
 import '../../utils/app_theme.dart';
 
 class BookingHistoryScreen extends StatefulWidget {
@@ -19,9 +20,12 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen>
     with SingleTickerProviderStateMixin {
   final _bookingService = BookingService();
   final _notificationService = NotificationService();
+  final _reviewService = ReviewService();
   late TabController _tabController;
 
   List<BookingModel> _allBookings = [];
+  // Track which bookings already have a review
+  final Set<String> _reviewedBookingIds = {};
   bool _isLoading = true;
 
   final _tabs = ['All', 'Pending', 'Confirmed', 'Active', 'Completed', 'Cancelled'];
@@ -44,6 +48,13 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen>
     try {
       final user = context.read<AuthProvider>().currentUser!;
       _allBookings = await _bookingService.getFarmerBookings(user.id);
+      // Check which completed bookings already have reviews
+      final completedBookings =
+          _allBookings.where((b) => b.status == 'completed');
+      for (final booking in completedBookings) {
+        final hasReview = await _reviewService.hasReview(booking.id);
+        if (hasReview) _reviewedBookingIds.add(booking.id);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -52,6 +63,189 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen>
       }
     }
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _rateBooking(BookingModel booking) async {
+    final result = await _showRatingDialog(booking);
+    if (result == null) return;
+    if (!mounted) return;
+    try {
+      final user = context.read<AuthProvider>().currentUser!;
+      await _reviewService.addReview(
+        bookingId: booking.id,
+        vehicleId: booking.vehicleId,
+        farmerId: user.id,
+        rating: result['rating'] as int,
+        reviewText: result['text'] as String?,
+      );
+      if (!mounted) return;
+      setState(() => _reviewedBookingIds.add(booking.id));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Thank you! Your review has been submitted. ⭐'),
+          backgroundColor: AppTheme.successGreen,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error submitting review: $e'),
+            backgroundColor: AppTheme.errorRed,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>?> _showRatingDialog(BookingModel booking) async {
+    int selectedRating = 0;
+    final reviewController = TextEditingController();
+
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          contentPadding: EdgeInsets.zero,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [AppTheme.primaryGreenDark, AppTheme.primaryGreen],
+                  ),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: Column(
+                  children: [
+                    const Icon(Icons.star_rate_rounded,
+                        color: AppTheme.accentAmber, size: 40),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Rate Your Experience',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      booking.vehicleTitle ?? 'Vehicle',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    const Text(
+                      'How was the vehicle?',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                    ),
+                    const SizedBox(height: 12),
+                    // Star selector
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(5, (i) {
+                        final star = i + 1;
+                        return GestureDetector(
+                          onTap: () => setDialogState(() => selectedRating = star),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Icon(
+                              star <= selectedRating
+                                  ? Icons.star_rounded
+                                  : Icons.star_outline_rounded,
+                              color: star <= selectedRating
+                                  ? AppTheme.accentAmber
+                                  : Colors.grey.shade400,
+                              size: 40,
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      selectedRating == 0
+                          ? 'Tap to rate'
+                          : [
+                              '', 'Poor 😞', 'Fair 😐', 'Good 😊',
+                              'Very Good 😄', 'Excellent! 🤩'
+                            ][selectedRating],
+                      style: TextStyle(
+                        color: selectedRating > 0
+                            ? AppTheme.accentAmber
+                            : Colors.grey,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: reviewController,
+                      maxLines: 3,
+                      maxLength: 300,
+                      decoration: InputDecoration(
+                        hintText: 'Write your review (optional)...',
+                        filled: true,
+                        fillColor: AppTheme.greyLight,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.all(12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          actions: [
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: selectedRating == 0
+                        ? null
+                        : () => Navigator.pop(ctx, {
+                              'rating': selectedRating,
+                              'text': reviewController.text.trim().isEmpty
+                                  ? null
+                                  : reviewController.text.trim(),
+                            }),
+                    icon: const Icon(Icons.send, size: 18),
+                    label: const Text('Submit'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   List<BookingModel> _filteredBookings(String tab) {
@@ -64,11 +258,10 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen>
   Future<void> _cancelBooking(BookingModel booking) async {
     final reason = await _showCancelDialog();
     if (reason == null) return;
-
+    if (!mounted) return;
     try {
-      await _bookingService.cancelBooking(booking.id, reason);
-      // Notify owner about cancellation
       final user = context.read<AuthProvider>().currentUser!;
+      await _bookingService.cancelBooking(booking.id, reason);
       await _notificationService.notifyOwnerBookingCancelled(
         ownerId: booking.ownerId,
         farmerName: user.fullName,
@@ -164,13 +357,20 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen>
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16),
                     itemCount: bookings.length,
-                    itemBuilder: (context, index) =>
-                        _BookingCard(
-                          booking: bookings[index],
-                          onCancel: bookings[index].status == 'pending'
-                              ? () => _cancelBooking(bookings[index])
-                              : null,
-                        ),
+                    itemBuilder: (context, index) {
+                      final b = bookings[index];
+                      return _BookingCard(
+                        booking: b,
+                        onCancel: b.status == 'pending'
+                            ? () => _cancelBooking(b)
+                            : null,
+                        onRate: b.status == 'completed' &&
+                                !_reviewedBookingIds.contains(b.id)
+                            ? () => _rateBooking(b)
+                            : null,
+                        hasReview: _reviewedBookingIds.contains(b.id),
+                      );
+                    },
                   ),
                 );
               }).toList(),
@@ -207,8 +407,15 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen>
 class _BookingCard extends StatelessWidget {
   final BookingModel booking;
   final VoidCallback? onCancel;
+  final VoidCallback? onRate;
+  final bool hasReview;
 
-  const _BookingCard({required this.booking, this.onCancel});
+  const _BookingCard({
+    required this.booking,
+    this.onCancel,
+    this.onRate,
+    this.hasReview = false,
+  });
 
   Color get _statusColor {
     switch (booking.status) {
@@ -357,6 +564,52 @@ class _BookingCard extends StatelessWidget {
                     side: const BorderSide(color: AppTheme.errorRed),
                   ),
                 ),
+              ),
+            ],
+
+            // Rate & Review for completed bookings
+            if (booking.status == 'completed') ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: hasReview
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentAmber.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: AppTheme.accentAmber.withValues(alpha: 0.4)),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.check_circle,
+                                color: AppTheme.accentAmber, size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              'Review Submitted ⭐',
+                              style: TextStyle(
+                                color: AppTheme.accentAmber,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ElevatedButton.icon(
+                        onPressed: onRate,
+                        icon: const Icon(Icons.star_rate_rounded, size: 18),
+                        label: const Text('Rate & Review'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.accentAmber,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
               ),
             ],
 

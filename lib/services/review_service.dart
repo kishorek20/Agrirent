@@ -19,6 +19,9 @@ class ReviewService {
     required String bookingId, required String vehicleId,
     required String farmerId, required int rating, String? reviewText,
   }) async {
+    // Insert the review — a Supabase DB trigger (trg_update_vehicle_rating)
+    // automatically recalculates and updates average_rating + total_bookings
+    // on the vehicles table with SECURITY DEFINER (bypasses RLS).
     await _svc.client.from(AppConstants.reviewsTable).insert({
       'booking_id': bookingId, 'vehicle_id': vehicleId,
       'farmer_id': farmerId, 'rating': rating, 'review_text': reviewText,

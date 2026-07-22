@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/vehicle_model.dart';
+import '../../services/search_ranking_service.dart';
 import '../../services/vehicle_service.dart';
 import '../../utils/app_theme.dart';
+import '../../widgets/similar_vehicles_widget.dart';
 
 class VehicleDetailScreen extends StatefulWidget {
   final String vehicleId;
@@ -17,6 +19,7 @@ class VehicleDetailScreen extends StatefulWidget {
 class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
   final _vehicleService = VehicleService();
   VehicleModel? _vehicle;
+  List<VehicleModel> _similarVehicles = [];
   bool _isLoading = true;
   int _currentImageIndex = 0;
 
@@ -29,6 +32,11 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
   Future<void> _loadVehicle() async {
     try {
       _vehicle = await _vehicleService.getVehicleById(widget.vehicleId);
+      if (_vehicle != null) {
+        final allVehicles = await _vehicleService.getApprovedVehicles();
+        _similarVehicles =
+            SearchRankingService.getSimilarVehicles(_vehicle!, allVehicles);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -352,6 +360,8 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 24),
+                  SimilarVehiclesWidget(similarVehicles: _similarVehicles),
 
                   const SizedBox(height: 100), // space for bottom button
                 ],
