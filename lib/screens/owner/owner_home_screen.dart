@@ -380,7 +380,7 @@ class _OwnerVehicleCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Price
+                // Price + Rating
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -392,8 +392,35 @@ class _OwnerVehicleCard extends StatelessWidget {
                         fontSize: 16,
                       ),
                     ),
-                    Text('${vehicle.totalBookings} bookings',
-                        style: Theme.of(context).textTheme.bodyMedium),
+                    const SizedBox(height: 4),
+                    // Rating row
+                    Row(
+                      children: [
+                        const Icon(Icons.star_rounded,
+                            size: 14, color: AppTheme.accentAmber),
+                        const SizedBox(width: 3),
+                        Text(
+                          vehicle.averageRating > 0
+                              ? vehicle.averageRating.toStringAsFixed(1)
+                              : 'No ratings',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.greyText,
+                          ),
+                        ),
+                        if (vehicle.averageRating > 0) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            '(${vehicle.totalBookings} ${vehicle.totalBookings == 1 ? 'review' : 'reviews'})',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.greyText,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
                 // Status badges

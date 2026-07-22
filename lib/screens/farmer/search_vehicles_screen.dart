@@ -1,9 +1,13 @@
 // lib/screens/farmer/search_vehicles_screen.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../models/vehicle_model.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/search_ranking_service.dart';
 import '../../services/vehicle_service.dart';
 import '../../utils/app_theme.dart';
 import '../../utils/constants.dart';
+import '../../widgets/search_suggestion_overlay.dart';
 import '../../widgets/vehicle_card.dart';
 
 class SearchVehiclesScreen extends StatefulWidget {
@@ -18,14 +22,31 @@ class _SearchVehiclesScreenState extends State<SearchVehiclesScreen> {
   final _searchController = TextEditingController();
   final _cityController = TextEditingController();
 
+  List<VehicleModel> _allVehicles = [];
   List<VehicleModel> _results = [];
+  List<SuggestionItem> _suggestions = [];
+
   bool _isLoading = false;
   bool _hasSearched = false;
+  bool _showSuggestions = false;
 
   String? _selectedType;
   String? _selectedState;
   double _maxPrice = 10000;
   bool _showFilters = false;
+  String _selectedSort = 'recommended';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialVehicles();
+  }
+
+  Future<void> _loadInitialVehicles() async {
+    try {
+      _allVehicles = await _vehicleService.getApprovedVehicles();
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -38,14 +59,24 @@ class _SearchVehiclesScreenState extends State<SearchVehiclesScreen> {
     setState(() {
       _isLoading = true;
       _hasSearched = true;
+      _showSuggestions = false;
     });
+
     try {
-      _results = await _vehicleService.getApprovedVehicles(
+      final fetched = await _vehicleService.getApprovedVehicles(
         vehicleType: _selectedType,
         city: _cityController.text.trim(),
         state: _selectedState,
         maxPrice: _maxPrice < 10000 ? _maxPrice : null,
-        searchQuery: _searchController.text.trim(),
+      );
+
+      final user = context.read<AuthProvider>().currentUser;
+      _results = SearchRankingService.rankVehicles(
+        fetched,
+        query: _searchController.text.trim(),
+        userCity: user?.city,
+        userState: user?.state,
+        sortBy: _selectedSort,
       );
     } catch (e) {
       if (mounted) {
@@ -54,6 +85,28 @@ class _SearchVehiclesScreenState extends State<SearchVehiclesScreen> {
       }
     }
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  void _onSearchQueryChanged(String query) {
+    final suggestions =
+        SearchRankingService.getSearchSuggestions(_allVehicles, query);
+    setState(() {
+      _suggestions = suggestions;
+      _showSuggestions = suggestions.isNotEmpty;
+    });
+  }
+
+  void _selectSuggestion(SuggestionItem item) {
+    _searchController.text = item.text;
+    setState(() {
+      _showSuggestions = false;
+      if (item.category == 'Category') {
+        _selectedType = item.text;
+      } else if (item.category == 'Location') {
+        _cityController.text = item.text;
+      }
+    });
+    _search();
   }
 
   @override
@@ -87,7 +140,18 @@ class _SearchVehiclesScreenState extends State<SearchVehiclesScreen> {
                     decoration: InputDecoration(
                       hintText: 'Search tractors, harvesters...',
                       hintStyle: const TextStyle(color: Colors.white60),
-                      prefixIcon: const Icon(Icons.search, color: Colors.white70),
+                      prefixIcon:
+                          const Icon(Icons.search, color: Colors.white70),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear,
+                                  color: Colors.white70, size: 20),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _showSuggestions = false);
+                              },
+                            )
+                          : null,
                       filled: true,
                       fillColor: Colors.white.withValues(alpha: 0.2),
                       border: OutlineInputBorder(
@@ -97,6 +161,7 @@ class _SearchVehiclesScreenState extends State<SearchVehiclesScreen> {
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 12),
                     ),
+                    onChanged: _onSearchQueryChanged,
                     onSubmitted: (_) => _search(),
                   ),
                 ),
@@ -113,6 +178,13 @@ class _SearchVehiclesScreenState extends State<SearchVehiclesScreen> {
               ],
             ),
           ),
+
+          // ── Search Suggestions Overlay ─────────────────────
+          if (_showSuggestions)
+            SearchSuggestionOverlay(
+              suggestions: _suggestions,
+              onSelected: _selectSuggestion,
+            ),
 
           // ── Filters ───────────────────────────────────────
           if (_showFilters)
@@ -206,7 +278,56 @@ class _SearchVehiclesScreenState extends State<SearchVehiclesScreen> {
               ),
             ),
 
-          // ── Results ───────────────────────────────────────
+          // ── Results Header & Sort Controls ─────────────────
+          if (_hasSearched && !_isLoading && _results.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Row(
+                children: [
+                  Text(
+                    '${_results.length} vehicle${_results.length != 1 ? 's' : ''} found',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: AppTheme.primaryGreen, fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  const Icon(Icons.sort, size: 16, color: AppTheme.primaryGreen),
+                  const SizedBox(width: 4),
+                  DropdownButton<String>(
+                    value: _selectedSort,
+                    underline: const SizedBox.shrink(),
+                    isDense: true,
+                    style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.primaryGreen,
+                        fontWeight: FontWeight.w600),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'recommended', child: Text('Recommended ✨')),
+                      DropdownMenuItem(
+                          value: 'rating', child: Text('Top Rated ⭐')),
+                      DropdownMenuItem(
+                          value: 'bookings', child: Text('Most Popular 🔥')),
+                      DropdownMenuItem(
+                          value: 'price_low', child: Text('Price: Low-High')),
+                      DropdownMenuItem(
+                          value: 'price_high', child: Text('Price: High-Low')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _selectedSort = val;
+                          _search();
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+          // ── Results Body ──────────────────────────────────
           Expanded(
             child: _isLoading
                 ? const Center(
@@ -216,35 +337,18 @@ class _SearchVehiclesScreenState extends State<SearchVehiclesScreen> {
                     ? _searchPrompt()
                     : _results.isEmpty
                         ? _noResults()
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                                child: Text(
-                                  '${_results.length} vehicle${_results.length != 1 ? 's' : ''} found',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(color: AppTheme.primaryGreen),
-                                ),
-                              ),
-                              Expanded(
-                                child: GridView.builder(
-                                  padding: const EdgeInsets.all(16),
-                                  gridDelegate:
-                                      const SliverGridDelegateWithMaxCrossAxisExtent(
-                                    maxCrossAxisExtent: 250,
-                                    crossAxisSpacing: 12,
-                                    mainAxisSpacing: 12,
-                                    childAspectRatio: 0.75,
-                                  ),
-                                  itemCount: _results.length,
-                                  itemBuilder: (context, index) =>
-                                      VehicleCard(vehicle: _results[index]),
-                                ),
-                              ),
-                            ],
+                        : GridView.builder(
+                            padding: const EdgeInsets.all(16),
+                            gridDelegate:
+                                const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 250,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 0.75,
+                            ),
+                            itemCount: _results.length,
+                            itemBuilder: (context, index) =>
+                                VehicleCard(vehicle: _results[index]),
                           ),
           ),
         ],

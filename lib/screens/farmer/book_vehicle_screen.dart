@@ -9,6 +9,8 @@ import '../../services/booking_service.dart';
 import '../../services/payment_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/vehicle_service.dart';
+import '../../services/razorpay_service.dart';
+import '../../services/supabase_service.dart';
 import '../../utils/app_theme.dart';
 import '../../utils/constants.dart';
 import '../../widgets/loading_button.dart';
@@ -154,35 +156,9 @@ class _BookVehicleScreenState extends State<BookVehicleScreen> {
         _endTime.hour, _endTime.minute);
   }
 
-  Future<void> _confirmBooking() async {
-    if (_startDate == null || _endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select booking dates')),
-      );
-      return;
-    }
-
-    setState(() => _isBooking = true);
-
+  Future<void> _processBooking({String? transactionId}) async {
     try {
       final user = context.read<AuthProvider>().currentUser!;
-
-      final isAvailable = await _bookingService.isVehicleAvailable(
-        widget.vehicleId, _fullStartDate, _fullEndDate,
-      );
-      if (!isAvailable) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Vehicle is not available for selected dates'),
-              backgroundColor: AppTheme.errorRed,
-            ),
-          );
-        }
-        setState(() => _isBooking = false);
-        return;
-      }
-
       // Create booking
       final bookingId = await _bookingService.createBooking({
         'vehicle_id': widget.vehicleId,
@@ -207,9 +183,7 @@ class _BookVehicleScreenState extends State<BookVehicleScreen> {
         ownerId: _vehicle!.ownerId,
         amount: _total,
         paymentMethod: _paymentMethod,
-        transactionId: _paymentMethod != 'Cash'
-            ? 'TXN${DateTime.now().millisecondsSinceEpoch}'
-            : null,
+        transactionId: transactionId,
       );
 
       // If online payment, update booking payment status
@@ -241,7 +215,7 @@ class _BookVehicleScreenState extends State<BookVehicleScreen> {
                 Text(
                   _paymentMethod == 'Cash'
                       ? 'Your booking is confirmed. Pay ₹${_total.toStringAsFixed(0)} in cash at pickup.'
-                      : 'Payment of ₹${_total.toStringAsFixed(0)} via $_paymentMethod successful!',
+                      : 'Payment of ₹${_total.toStringAsFixed(0)} successful!',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
@@ -276,7 +250,93 @@ class _BookVehicleScreenState extends State<BookVehicleScreen> {
         );
       }
     }
-    if (mounted) setState(() => _isBooking = false);
+  }
+
+  Future<void> _confirmBooking() async {
+    if (_startDate == null || _endDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select booking dates')),
+      );
+      return;
+    }
+
+    setState(() => _isBooking = true);
+
+    try {
+      final user = context.read<AuthProvider>().currentUser!;
+
+      final isAvailable = await _bookingService.isVehicleAvailable(
+        widget.vehicleId, _fullStartDate, _fullEndDate,
+      );
+      if (!isAvailable) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Vehicle is not available for selected dates'),
+              backgroundColor: AppTheme.errorRed,
+            ),
+          );
+        }
+        setState(() => _isBooking = false);
+        return;
+      }
+
+      if (_paymentMethod == 'Cash') {
+        await _processBooking();
+        if (mounted) setState(() => _isBooking = false);
+        return;
+      }
+
+      // Online Payment via Razorpay
+      final response = await SupabaseService().client.functions.invoke(
+        'create-razorpay-order',
+        body: {
+          'amount': _total,
+          'currency': 'INR',
+          'receipt': 'rcpt_${DateTime.now().millisecondsSinceEpoch}',
+        },
+      );
+
+      final data = response.data;
+      if (data == null || data['error'] != null) {
+        throw Exception(data?['error'] ?? 'Failed to create order');
+      }
+
+      final orderId = data['order_id'];
+      final keyId = data['key'];
+
+      await RazorpayServiceWrapper.openCheckout(
+        amount: _total,
+        currency: 'INR',
+        orderId: orderId,
+        keyId: keyId,
+        name: AppConstants.appName,
+        description: 'Booking: ${_vehicle!.title}',
+        prefillName: user.fullName,
+        prefillEmail: user.email,
+        prefillContact: user.phone ?? '',
+        paymentMethod: _paymentMethod,
+        onSuccess: (paymentId, orderId, signature) async {
+          await _processBooking(transactionId: paymentId);
+          if (mounted) setState(() => _isBooking = false);
+        },
+        onError: (error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Payment Failed: $error'), backgroundColor: AppTheme.errorRed),
+            );
+            setState(() => _isBooking = false);
+          }
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.errorRed),
+        );
+      }
+      if (mounted) setState(() => _isBooking = false);
+    }
   }
 
   @override
